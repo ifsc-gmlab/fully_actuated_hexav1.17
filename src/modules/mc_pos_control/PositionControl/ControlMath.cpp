@@ -50,6 +50,42 @@ void thrustToAttitude(const Vector3f &thr_sp, const float yaw_sp, vehicle_attitu
 	att_sp.thrust_body[2] = -thr_sp.length();
 }
 
+bool thrustNedToBody(const Vector3f &thr_sp_ned, const Quatf &q_current,
+		     const Quatf &q_desired, vehicle_attitude_setpoint_s &att_sp)
+{
+
+	// 计算当前姿态和期望姿态的模平方
+	const float current_norm_sq = q_current.norm_squared();
+	const float desired_norm_sq = q_desired.norm_squared();
+
+	//合法性检测
+	if (!thr_sp_ned.isAllFinite() || !q_current.isAllFinite() || !q_desired.isAllFinite()
+	    || current_norm_sq < FLT_EPSILON || desired_norm_sq < FLT_EPSILON) {
+		return false;
+	}
+
+	// 使用当前姿态进行旋转，使用q_desired会导致力和姿态耦合
+	// 每次有跟踪误差时，会导致力和姿态再次耦合。
+
+	// 归一化当前姿态
+	Quatf q_current_normalized{q_current};
+	q_current_normalized.normalize();
+
+	Quatf q_desired_normalized{q_desired};
+	q_desired_normalized.normalize();
+
+	// 将期望力转换到机体坐标系
+	const Vector3f thrust_body = q_current_normalized.rotateVectorInverse(thr_sp_ned);
+
+	if (!thrust_body.isAllFinite()) {
+		return false;
+	}
+
+	q_desired_normalized.copyTo(att_sp.q_d);
+	thrust_body.copyTo(att_sp.thrust_body);
+	return true;
+}
+
 void limitTilt(Vector3f &body_unit, const Vector3f &world_unit, const float max_angle)
 {
 	// determine tilt

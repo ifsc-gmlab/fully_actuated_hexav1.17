@@ -136,6 +136,62 @@ TEST(ControlMathTest, ThrottleAttitudeMapping)
 	EXPECT_FLOAT_EQ(att.thrust_body[2], -1.f);
 }
 
+TEST(ControlMathTest, IndependentThrustAttitudeMappingLevel)
+{
+	const Vector3f thrust_ned{0.2f, -0.1f, -0.7f};
+	const Quatf q_current{};
+	const Quatf q_desired{Eulerf{0.f, 0.f, M_PI_2_F}};
+	vehicle_attitude_setpoint_s att{};
+
+	ASSERT_TRUE(thrustNedToBody(thrust_ned, q_current, q_desired, att));
+
+	EXPECT_NEAR(att.thrust_body[0], thrust_ned(0), 1e-6f);
+	EXPECT_NEAR(att.thrust_body[1], thrust_ned(1), 1e-6f);
+	EXPECT_NEAR(att.thrust_body[2], thrust_ned(2), 1e-6f);
+
+	const Eulerf desired_euler{Quatf{att.q_d}};
+	EXPECT_NEAR(desired_euler.phi(), 0.f, 1e-6f);
+	EXPECT_NEAR(desired_euler.theta(), 0.f, 1e-6f);
+	EXPECT_NEAR(desired_euler.psi(), M_PI_2_F, 1e-6f);
+}
+
+TEST(ControlMathTest, IndependentThrustAttitudeMappingRotated)
+{
+	const Vector3f thrust_ned{0.25f, -0.15f, -0.65f};
+	const Quatf q_current{Eulerf{0.25f, -0.2f, 1.1f}};
+	const Quatf q_desired{Eulerf{-0.1f, 0.15f, -0.7f}};
+	vehicle_attitude_setpoint_s att{};
+
+	ASSERT_TRUE(thrustNedToBody(thrust_ned, q_current, q_desired, att));
+
+	const Vector3f thrust_body{att.thrust_body};
+	const Vector3f reconstructed_ned = q_current.rotateVector(thrust_body);
+
+	for (int axis = 0; axis < 3; ++axis) {
+		EXPECT_NEAR(reconstructed_ned(axis), thrust_ned(axis), 1e-6f);
+	}
+
+	EXPECT_NEAR(thrust_body.norm(), thrust_ned.norm(), 1e-6f);
+
+	const Quatf q_output{att.q_d};
+	EXPECT_NEAR(fabsf(q_output.dot(q_desired)), 1.f, 1e-6f);
+}
+
+TEST(ControlMathTest, IndependentThrustAttitudeMappingRejectsInvalidInput)
+{
+	vehicle_attitude_setpoint_s att{};
+	const Vector3f valid_thrust{0.f, 0.f, -0.5f};
+	const Quatf valid_attitude{};
+	const Quatf zero_quaternion{0.f, 0.f, 0.f, 0.f};
+
+	EXPECT_FALSE(thrustNedToBody(valid_thrust, zero_quaternion, valid_attitude, att));
+	EXPECT_FALSE(thrustNedToBody(valid_thrust, valid_attitude, zero_quaternion, att));
+
+	Vector3f invalid_thrust{valid_thrust};
+	invalid_thrust(0) = NAN;
+	EXPECT_FALSE(thrustNedToBody(invalid_thrust, valid_attitude, valid_attitude, att));
+}
+
 TEST(ControlMathTest, ConstrainXYPriorities)
 {
 	const float max = 5.f;

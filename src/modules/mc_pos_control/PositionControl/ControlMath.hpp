@@ -54,6 +54,24 @@ namespace ControlMath
 void thrustToAttitude(const matrix::Vector3f &thr_sp, const float yaw_sp, vehicle_attitude_setpoint_s &att_sp);
 
 /**
+ * Map NED thrust to body-frame thrust and fill an independent attitude setpoint.
+ *
+ * The position controller produces thrust in the NED frame, while the control
+ * allocator consumes thrust in the current body FRD frame. The current attitude
+ * is therefore used only for the frame transformation. The desired attitude is
+ * copied independently and does not follow the thrust direction.
+ *
+ * @param thr_sp_ned desired normalized 3D thrust vector in NED
+ * @param q_current current attitude quaternion, body FRD to NED
+ * @param q_desired desired attitude quaternion, body FRD to NED
+ * @param att_sp attitude setpoint to fill
+ * @return true if all inputs and the generated setpoint are valid
+ */
+bool thrustNedToBody(const matrix::Vector3f &thr_sp_ned,
+		     const matrix::Quatf &q_current, const matrix::Quatf &q_desired,
+		     vehicle_attitude_setpoint_s &att_sp);
+
+/**
  * Limits the tilt angle between two unit vectors
  * @param body_unit unit vector that will get adjusted if angle is too big
  * @param world_unit fixed vector to measure the angle against

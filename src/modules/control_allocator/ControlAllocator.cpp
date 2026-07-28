@@ -828,6 +828,19 @@ int ControlAllocator::print_status()
 
 		PX4_INFO("  Effectiveness.T =");
 		effectiveness.T().print();
+
+		matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> mix;
+
+		if (_control_allocation[i]->getMixMatrix(mix)) {
+			PX4_INFO("  Mix (normalized) =");
+			mix.print();
+			PX4_INFO("  Allocation scale (roll pitch yaw Fx Fy Fz) =");
+			_control_allocation[i]->getControlAllocationScale().T().print();
+
+		} else {
+			PX4_INFO("  Mix (normalized) = unavailable");
+		}
+
 		PX4_INFO("  minimum =");
 		_control_allocation[i]->getActuatorMin().T().print();
 		PX4_INFO("  maximum =");

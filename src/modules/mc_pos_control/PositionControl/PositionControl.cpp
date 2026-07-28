@@ -149,7 +149,12 @@ void PositionControl::_velocityControl(const float dt)
 	// No control input from setpoints or corresponding states which are NAN
 	ControlMath::addIfNotNanVector3f(_acc_sp, acc_sp_velocity);
 
-	_accelerationControl();
+	if (_independent_thrust_control) {
+		_accelerationControlIndependent();
+
+	} else {
+		_accelerationControl();
+	}
 
 	// Integrator anti-windup in vertical direction
 	if ((_thr_sp(2) >= -_lim_thr_min && vel_error(2) >= 0.f) ||
@@ -219,6 +224,21 @@ void PositionControl::_accelerationControl()
 	const float cos_ned_body = (Vector3f(0, 0, 1).dot(body_z));
 	const float collective_thrust = math::min(thrust_ned_z / cos_ned_body, -_lim_thr_min);
 	_thr_sp = body_z * collective_thrust;
+}
+
+void PositionControl::_accelerationControlIndependent()
+{
+	// A fully actuated vehicle realizes the complete NED force vector without
+	// changing attitude. Map every acceleration axis with the same hover-thrust
+	// metric instead of converting the horizontal components to a limited tilt.
+	const float acceleration_to_thrust = _hover_thrust / CONSTANTS_ONE_G;
+	_thr_sp.xy() = _acc_sp.xy() * acceleration_to_thrust;
+	_thr_sp(2) = _acc_sp(2) * acceleration_to_thrust - _hover_thrust;
+
+	// Non-reversible multicopter actuators cannot command a positive body-Z
+	// collective. Keep the normal minimum vertical thrust behavior; the common
+	// total-thrust and anti-windup limits below remain active.
+	_thr_sp(2) = math::min(_thr_sp(2), -_lim_thr_min);
 }
 
 bool PositionControl::_inputValid()

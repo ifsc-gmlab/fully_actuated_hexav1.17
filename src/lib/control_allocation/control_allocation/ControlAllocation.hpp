@@ -224,6 +224,19 @@ public:
 
 	virtual void updateParameters() {}
 
+	/**
+	 * Get the mix matrix (pseudo-inverse of the effectiveness matrix).
+	 *
+	 * @param mix Mix matrix to fill
+	 * @return true if the mix matrix is available
+	 */
+	virtual bool getMixMatrix(matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> &mix) { return false; }
+
+	/**
+	 * Get the control allocation scale applied when normalizing the mix matrix.
+	 */
+	const matrix::Vector<float, NUM_AXES> &getControlAllocationScale() const { return _control_allocation_scale; }
+
 	int numConfiguredActuators() const { return _num_actuators; }
 
 	void setNormalizeRPY(bool normalize_rpy) { _normalize_rpy = normalize_rpy; }

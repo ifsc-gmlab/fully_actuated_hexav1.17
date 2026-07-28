@@ -59,6 +59,13 @@ public:
 				    bool update_normalization_scale) override;
 	void setMetricAllocation(bool metric_allocation) { _metric_allocation = metric_allocation; }
 
+	bool getMixMatrix(matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> &mix) override
+	{
+		updatePseudoInverse();
+		mix = _mix;
+		return true;
+	}
+
 protected:
 	matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> _mix;
 

@@ -33,6 +33,7 @@
 
 #include <gtest/gtest.h>
 #include <PositionControl.hpp>
+#include <geo/geo.h>
 #include <px4_defines.h>
 
 using namespace matrix;
@@ -146,6 +147,38 @@ TEST_F(PositionControlBasicTest, TiltLimit)
 	EXPECT_LE(angle, .50001f);
 
 	_position_control.setTiltLimit(1.f);  // restore original
+}
+
+TEST_F(PositionControlBasicTest, IndependentThrustBypassesTiltCone)
+{
+	_position_control.setTiltLimit(0.1f);
+	_position_control.setIndependentThrustControl(true);
+	Vector3f(5.f, 0.f, 0.f).copyTo(_input_setpoint.acceleration);
+
+	ASSERT_TRUE(runController());
+	const Vector3f thrust(_output_setpoint.thrust);
+	EXPECT_NEAR(thrust(0), 5.f * 0.5f / CONSTANTS_ONE_G, 1e-5f);
+	EXPECT_FLOAT_EQ(thrust(1), 0.f);
+	EXPECT_FLOAT_EQ(thrust(2), -0.5f);
+	EXPECT_GT(atan2f(thrust(0), -thrust(2)), 0.1f);
+
+	// Disabling the fully actuated path restores the conventional tilt cone.
+	_position_control.setIndependentThrustControl(false);
+	ASSERT_TRUE(runController());
+	const Vector3f conventional_thrust(_output_setpoint.thrust);
+	EXPECT_LE(atan2f(conventional_thrust(0), -conventional_thrust(2)), 0.10001f);
+}
+
+TEST_F(PositionControlBasicTest, IndependentThrustMapsAxesDirectly)
+{
+	_position_control.setIndependentThrustControl(true);
+	Vector3f(2.f, -1.f, 1.f).copyTo(_input_setpoint.acceleration);
+
+	ASSERT_TRUE(runController());
+	const Vector3f thrust(_output_setpoint.thrust);
+	EXPECT_NEAR(thrust(0), 2.f * 0.5f / CONSTANTS_ONE_G, 1e-5f);
+	EXPECT_NEAR(thrust(1), -1.f * 0.5f / CONSTANTS_ONE_G, 1e-5f);
+	EXPECT_NEAR(thrust(2), 1.f * 0.5f / CONSTANTS_ONE_G - 0.5f, 1e-5f);
 }
 
 TEST_F(PositionControlBasicTest, VelocityLimit)

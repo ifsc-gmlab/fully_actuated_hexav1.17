@@ -213,7 +213,6 @@ parameters:
                 short: Moment coefficient of rotor ${i}
                 long: |
                   The moment coefficient if defined as Torque = KM * Thrust.
-
                   Use a positive value for a rotor with CCW rotation.
                   Use a negative value for a rotor with CW rotation.
             type: float

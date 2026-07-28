@@ -83,17 +83,17 @@
 class ControlAllocator : public ModuleBase<ControlAllocator>, public ModuleParams, public px4::ScheduledWorkItem
 {
 public:
-	static constexpr int NUM_ACTUATORS = ControlAllocation::NUM_ACTUATORS;
-	static constexpr int NUM_AXES = ControlAllocation::NUM_AXES;
+	static constexpr int NUM_ACTUATORS = ControlAllocation::NUM_ACTUATORS; //内部控制分配矩阵的维数
+	static constexpr int NUM_AXES = ControlAllocation::NUM_AXES;   // 控制需求的维度（3推力+3力矩）
 
-	static constexpr int MAX_NUM_MOTORS = actuator_motors_s::NUM_CONTROLS;
-	static constexpr int MAX_NUM_SERVOS = actuator_servos_s::NUM_CONTROLS;
+	static constexpr int MAX_NUM_MOTORS = actuator_motors_s::NUM_CONTROLS; // 最大电机数量
+	static constexpr int MAX_NUM_SERVOS = actuator_servos_s::NUM_CONTROLS; // 最大舵机数量
 
 	using ActuatorVector = ActuatorEffectiveness::ActuatorVector;
 
-	ControlAllocator();
+	ControlAllocator(); // 构造函数
 
-	virtual ~ControlAllocator();
+	virtual ~ControlAllocator();  // 析构函数
 
 	/** @see ModuleBase */
 	static int task_spawn(int argc, char *argv[]);
@@ -126,18 +126,18 @@ private:
 	/**
 	 * initialize some vectors/matrices from parameters
 	 */
-	void parameters_updated();
+	void parameters_updated(); // 参数更新
 
-	void update_allocation_method(bool force);
-	bool update_effectiveness_source();
+	void update_allocation_method(bool force); // 更新分配方法
+	bool update_effectiveness_source(); // 更新有效性源
 
-	void update_effectiveness_matrix_if_needed(EffectivenessUpdateReason reason);
+	void update_effectiveness_matrix_if_needed(EffectivenessUpdateReason reason); // 如果需要，更新有效性矩阵
 
-	void check_for_motor_failures();
+	void check_for_motor_failures(); // 检查电机故障
 
-	void publish_control_allocator_status(int matrix_index);
+	void publish_control_allocator_status(int matrix_index); // 发布控制分配器状态
 
-	void publish_actuator_controls();
+	void publish_actuator_controls(); // 发布电机和舵机控制
 
 	AllocationMethod _allocation_method_id{AllocationMethod::NONE};
 	ControlAllocation *_control_allocation[ActuatorEffectiveness::MAX_NUM_MATRICES] {}; 	///< class for control allocation calculations

@@ -1,0 +1,30 @@
+# Single fully-actuated Typhoon H480 over USB HITL.
+#
+# Build and flash firmware containing airframe 1003, then select it once:
+#   param set SYS_AUTOSTART 1003
+#   param set MAV_0_RATE 10000
+#   param save
+#   reboot
+#
+# Start Gazebo Harmonic and the bridge:
+#   ./launch.py configs/typhoon_h480_hitl.yaml
+
+world: default
+events_metadata: build/px4_fmu-v6x_default/events/all_events.json
+
+vehicles:
+  - name: typhoon_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: typhoon_h480
+    sdf_model: typhoon_h480
+    sensor_link: base_link
+    pose: {x: 0, y: 0, z: 0.3}
+
+    # HIL_ACT_FUNC1..6 map Motor1..6 to controls[0..5].
+    # The SDF motor plugins accept rotor velocity commands up to 1600 rad/s.
+    outputs:
+      - type: motor
+        channels: [0, 1, 2, 3, 4, 5]
+        min: 0
+        max: 1600
