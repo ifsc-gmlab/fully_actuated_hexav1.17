@@ -1,0 +1,15 @@
+# Single x500 quadrotor over USB.
+#
+# One command does everything:
+#   ./launch.py configs/single_x500.yaml
+
+world: default
+
+vehicles:
+  - name: drone_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: x500              # spawn name in Gz (must be unique)
+    sdf_model: x500          # which models/<...> folder (default: same as model)
+    pose: {x: 0, y: 0, z: 0.3}
+    preset: x500_quad

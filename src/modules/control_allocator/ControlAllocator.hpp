@@ -161,6 +161,7 @@ private:
 		HELICOPTER_COAXIAL = 12,
 		SPACECRAFT_2D = 13,
 		SPACECRAFT_3D = 14,
+		FULLY_ACTUATED_HEXA = 16,
 	};
 
 	enum class FailureMode {

@@ -1,0 +1,31 @@
+# 3-quadrotor swarm.
+#
+# One command does everything:
+#   ./launch.py configs/swarm_3x_quad.yaml
+#
+# Each vehicle must:
+#   - have unique MAVLink sysid (matches the FC's MAV_SYS_ID parameter)
+#   - have unique `model` name (used as the Gz instance name)
+#   - have unique `pose` (don't spawn on top of each other)
+
+world: default
+
+defaults:
+  baud: 921600
+  sdf_model: x500              # all 3 use x500 SDF folder
+
+vehicles:
+  - name: drone_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0
+    model: x500_0
+    pose: {x: 0, y: 0, z: 0.3}
+    preset: x500_quad
+
+  - name: drone_1
+    sysid: 2
+    transport: serial:///dev/ttyACM1
+    model: x500_1
+    pose: {x: 2, y: 0, z: 0.3}
+    preset: x500_quad
+

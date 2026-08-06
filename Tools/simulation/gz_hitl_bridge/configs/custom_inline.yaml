@@ -1,0 +1,18 @@
+# Example of a fully custom airframe (no preset) — defines outputs inline.
+# Useful when you have a non-standard SDF or want to override mins/maxes.
+
+vehicles:
+  - name: my_hex
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: my_custom_hex
+    world: default
+    outputs:
+      - type: motor
+        channels: [0, 1, 2, 3, 4, 5]    # HIL_ACTUATOR_CONTROLS slots
+        min: 100                         # rad/s at controls=0
+        max: 1200                        # rad/s at controls=1
+      - type: servo
+        channels:
+          - {hil: 6, gz: 0, min: -0.78, max: 0.78, bidirectional: true}
+          - {hil: 7, gz: 1, min: -0.78, max: 0.78, bidirectional: true}

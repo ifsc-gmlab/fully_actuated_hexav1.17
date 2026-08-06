@@ -1,0 +1,42 @@
+# 混合机型集群示例：2 台 x500 四旋翼 + 1 台 VTOL + 1 台 Rover
+#   ./launch.py configs/swarm_mixed.yaml
+#
+# 演示一个 YAML 文件如何配置完全不同的机型，每台位置错开。
+
+world: default
+
+defaults:
+  baud: 921600
+
+vehicles:
+  - name: quad_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0
+    model: x500_0
+    sdf_model: x500
+    pose: {x: 0,  y: 0, z: 0.3}
+    preset: x500_quad
+
+  - name: quad_1
+    sysid: 2
+    transport: serial:///dev/ttyACM1
+    model: x500_1
+    sdf_model: x500
+    pose: {x: 3,  y: 0, z: 0.3}
+    preset: x500_quad
+
+  - name: vtol_0
+    sysid: 3
+    transport: udp://127.0.0.1:14552
+    model: standard_vtol_0
+    sdf_model: standard_vtol
+    pose: {x: 6,  y: 0, z: 0.3, yaw: 0}
+    preset: standard_vtol
+
+  - name: rover_0
+    sysid: 4
+    transport: udp://127.0.0.1:14553
+    model: r1_rover_0
+    sdf_model: r1_rover
+    pose: {x: -3, y: 0, z: 0.1}
+    preset: r1_rover

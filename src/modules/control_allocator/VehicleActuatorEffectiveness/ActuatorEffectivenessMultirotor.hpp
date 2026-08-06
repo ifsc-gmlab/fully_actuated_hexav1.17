@@ -39,7 +39,9 @@
 class ActuatorEffectivenessMultirotor : public ModuleParams, public ActuatorEffectiveness
 {
 public:
-	ActuatorEffectivenessMultirotor(ModuleParams *parent);
+	ActuatorEffectivenessMultirotor(ModuleParams *parent,
+					ActuatorEffectivenessRotors::AxisConfiguration axis_config =
+						ActuatorEffectivenessRotors::AxisConfiguration::Configurable);
 	virtual ~ActuatorEffectivenessMultirotor() = default;
 
 	bool getEffectivenessMatrix(Configuration &configuration, EffectivenessUpdateReason external_update) override;

@@ -273,6 +273,11 @@ ControlAllocator::update_effectiveness_source()
 			tmp = new ActuatorEffectivenessSpacecraft(this);
 			break;
 
+		case EffectivenessSource::FULLY_ACTUATED_HEXA:
+			tmp = new ActuatorEffectivenessMultirotor(this,
+					ActuatorEffectivenessRotors::AxisConfiguration::FixedFullyActuatedHexa);
+			break;
+
 		default:
 			PX4_ERR("Unknown airframe");
 			break;

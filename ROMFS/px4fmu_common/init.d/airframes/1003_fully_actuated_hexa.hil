@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# @name HIL Fully Actuated Hexarotor
+#
+# @type Simulation
+# @class Copter
+#
+# @output Motor1 right CW
+# @output Motor2 left CCW
+# @output Motor3 front-left CW
+# @output Motor4 rear-right CCW
+# @output Motor5 front-right CCW
+# @output Motor6 rear-left CW
+#
+# @board px4_fmu-v2 exclude
+# @board bitcraze_crazyflie exclude
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+param set SYS_HITL 1
+
+param set UAVCAN_ENABLE 0
+
+# disable some checks to allow to fly
+# - without real battery
+param set-default CBRK_SUPPLY_CHK 894281
+
+# MAV_TYPE_HEXAROTOR 13
+param set-default MAV_TYPE 13
+
+# Thrust axes are hardcoded in firmware (FixedFullyActuatedHexa); not exposed to QGC.
+param set-default CA_AIRFRAME 16
+param set-default CA_ROTOR_COUNT 6
+
+# Motor order: 0=M1 right CW, 1=M2 left CCW, 2=M3 front-left CW,
+#   3=M4 rear-right CCW, 4=M5 front-right CCW, 5=M6 rear-left CW.
+# Values are in PX4 FRD.
+param set-default CA_ROTOR0_PX  0.000000
+param set-default CA_ROTOR0_PY  0.242705
+param set-default CA_ROTOR0_PZ -0.022000
+param set-default CA_ROTOR0_KM -0.0245499 # M1 right, CW
+
+param set-default CA_ROTOR1_PX  0.000000
+param set-default CA_ROTOR1_PY -0.242705
+param set-default CA_ROTOR1_PZ -0.022000
+param set-default CA_ROTOR1_KM  0.0245499 # M2 left, CCW
+
+param set-default CA_ROTOR2_PX  0.210191
+param set-default CA_ROTOR2_PY -0.121353
+param set-default CA_ROTOR2_PZ -0.022000
+param set-default CA_ROTOR2_KM -0.0245499 # M3 front-left, CW
+
+param set-default CA_ROTOR3_PX -0.210191
+param set-default CA_ROTOR3_PY  0.121353
+param set-default CA_ROTOR3_PZ -0.022000
+param set-default CA_ROTOR3_KM  0.0245499 # M4 rear-right, CCW
+
+param set-default CA_ROTOR4_PX  0.210191
+param set-default CA_ROTOR4_PY  0.121353
+param set-default CA_ROTOR4_PZ -0.022000
+param set-default CA_ROTOR4_KM  0.0245499 # M5 front-right, CCW
+
+param set-default CA_ROTOR5_PX -0.210191
+param set-default CA_ROTOR5_PY -0.121353
+param set-default CA_ROTOR5_PZ -0.022000
+param set-default CA_ROTOR5_KM -0.0245499 # M6 rear-left, CW
+
+# Use pseudo-inverse allocation for the custom hex rotor positions and yaw signs.
+param set-default CA_METHOD 0
+
+# Full-rank 6-DoF geometry: Pose mode locks NED XYZ after takeoff while
+# manual roll/pitch/yaw change attitude; position corrections use body Fx/Fy.
+param set-default MPC_FA_MODE 2
+param set-default MPC_FA_TILT_MAX 10.0
+
+param set-default MC_YAW_TQ_CUTOFF 0.0
+
+# Map motors 1..6 onto HIL_ACTUATOR_CONTROLS[0..5]
+param set-default HIL_ACT_FUNC1 101
+param set-default HIL_ACT_FUNC2 102
+param set-default HIL_ACT_FUNC3 103
+param set-default HIL_ACT_FUNC4 104
+param set-default HIL_ACT_FUNC5 105
+param set-default HIL_ACT_FUNC6 106

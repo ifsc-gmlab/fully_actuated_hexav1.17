@@ -58,6 +58,7 @@ public:
 		Configurable, ///< axis can be configured
 		FixedForward, ///< axis is fixed, pointing forwards (positive X)
 		FixedUpwards, ///< axis is fixed, pointing upwards (negative Z)
+		FixedFullyActuatedHexa, ///< commercial fixed 6-DoF hex thrust axes (not parameterized)
 	};
 
 	static constexpr int NUM_ROTORS_MAX = 12;

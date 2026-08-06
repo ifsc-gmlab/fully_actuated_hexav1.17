@@ -35,9 +35,10 @@
 
 using namespace matrix;
 
-ActuatorEffectivenessMultirotor::ActuatorEffectivenessMultirotor(ModuleParams *parent)
+ActuatorEffectivenessMultirotor::ActuatorEffectivenessMultirotor(ModuleParams *parent,
+		ActuatorEffectivenessRotors::AxisConfiguration axis_config)
 	: ModuleParams(parent),
-	  _mc_rotors(this)
+	  _mc_rotors(this, axis_config)
 {
 }
 

@@ -43,7 +43,7 @@
 
 **新增函数**
 1. `generateFullActuatedAttitudeSetpoint()`
-   - mode 1：`q_desired = Euler(0, 0, yaw_sp)`（锁平，只跟偏航）
+   - mode 1：进入模式时锁存四旋翼当前滚转角和俯仰角，偏航仍跟随位置设定值；位置变化仅由三轴独立推力实现
    - mode 2：摇杆 → roll/pitch（`MPC_FA_TILT_MAX` + `MC_MAN_TILT_TAU` 滤波），再与 yaw 合成 `q_desired`
    - 调用 `ControlMath::thrustNedToBody(thrust_ned, q_current, q_desired, att_sp)`
    - 写入 `yaw_sp_move_rate`；姿态超时/非法则返回 false
@@ -157,7 +157,7 @@ att_sp.thrust_body = thrust_body
 | `MPC_FA_MODE` | 行为 |
 |---------------|------|
 | 0 | 标准欠驱动映射（回退路径） |
-| 1 | 滚转/俯仰锁平，偏航可控；三轴推力独立（平飞平移） |
+| 1 | 锁存并保持进入模式时的当前滚转角和俯仰角，偏航仍可控；三轴推力独立改变位置 |
 | 2 | Pose：起飞后锁 XYZ；摇杆控姿态；油门不再改高度 |
 
 配套逻辑：

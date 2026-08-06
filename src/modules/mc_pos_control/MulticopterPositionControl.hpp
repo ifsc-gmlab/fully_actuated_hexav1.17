@@ -122,7 +122,9 @@ private:
 	manual_control_setpoint_s _manual_control_setpoint{};
 	vehicle_attitude_s _vehicle_attitude{};
 	vehicle_control_mode_s _vehicle_control_mode{};
+	matrix::Quatf _full_actuated_attitude_hold{};
 	matrix::Vector3f _full_actuated_position_hold{};
+	bool _full_actuated_attitude_hold_valid{false};
 	bool _full_actuated_position_hold_valid{false};
 	bool _full_actuated_tilt_filter_initialized{false};
 	int32_t _full_actuated_mode{0};

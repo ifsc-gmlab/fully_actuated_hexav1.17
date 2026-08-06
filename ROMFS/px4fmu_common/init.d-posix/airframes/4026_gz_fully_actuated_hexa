@@ -1,19 +1,18 @@
 #!/bin/sh
 #
-# @name Gazebo fully_actuated_hexa
+# @name Fully Actuated Hexarotor x
 #
 # @type Hexarotor x
 # @class Copter
 #
-# Custom visual STL body with the same fully-actuated motor geometry /
-# allocation as 4025_gz_typhoon_h480 (alpha=35 deg, beta=+25 deg).
-#
 
-. ${R}etc/init.d/rc.mc_defaults
-
+# Gazebo wrapper for 6003_fully_actuated_hexa.
+# QGC airframe UI / CA geometry / FA defaults come from the real airframe.
 PX4_SIMULATOR=${PX4_SIMULATOR:=gz}
 PX4_GZ_WORLD=${PX4_GZ_WORLD:=default}
 PX4_SIM_MODEL=${PX4_SIM_MODEL:=fully_actuated_hexa}
+
+. ${R}etc/init.d/airframes/6003_fully_actuated_hexa
 
 param set-default SIM_GZ_EN 1
 
@@ -21,65 +20,6 @@ param set-default SIM_GZ_EN 1
 # but this model has no real ESC arming feedback/current telemetry.
 param set-default COM_ARM_CHK_ESCS 0
 param set-default FD_ESCS_EN 0
-
-# MAV_TYPE_HEXAROTOR 13
-param set-default MAV_TYPE 13
-
-param set-default CA_AIRFRAME 0
-param set-default CA_ROTOR_COUNT 6
-
-# Same CA geometry as 4025_gz_typhoon_h480 / hex600 vector tilt.
-# Motor order: 0=M1 right CW, 1=M2 left CCW, 2=M3 front-left CW,
-#   3=M4 rear-right CCW, 4=M5 front-right CCW, 5=M6 rear-left CW.
-# Values are in PX4 FRD.
-# SDF/Gazebo FLU to PX4 FRD: PX=x, PY=-y, PZ=-z, AX=x, AY=-y, AZ=-z.
-param set-default CA_ROTOR0_PX  0.000000
-param set-default CA_ROTOR0_PY  0.242705
-param set-default CA_ROTOR0_PZ -0.022000
-param set-default CA_ROTOR0_KM -0.0245499 # M1 right, CW
-param set-default CA_ROTOR0_AX -0.519837
-param set-default CA_ROTOR0_AY -0.422618
-param set-default CA_ROTOR0_AZ -0.742404
-
-param set-default CA_ROTOR1_PX  0.000000
-param set-default CA_ROTOR1_PY -0.242705
-param set-default CA_ROTOR1_PZ -0.022000
-param set-default CA_ROTOR1_KM  0.0245499 # M2 left, CCW
-param set-default CA_ROTOR1_AX -0.519837
-param set-default CA_ROTOR1_AY  0.422618
-param set-default CA_ROTOR1_AZ -0.742404
-
-param set-default CA_ROTOR2_PX  0.210191
-param set-default CA_ROTOR2_PY -0.121353
-param set-default CA_ROTOR2_PZ -0.022000
-param set-default CA_ROTOR2_KM -0.0245499 # M3 front-left, CW
-param set-default CA_ROTOR2_AX -0.106080
-param set-default CA_ROTOR2_AY  0.661501
-param set-default CA_ROTOR2_AZ -0.742404
-
-param set-default CA_ROTOR3_PX -0.210191
-param set-default CA_ROTOR3_PY  0.121353
-param set-default CA_ROTOR3_PZ -0.022000
-param set-default CA_ROTOR3_KM  0.0245499 # M4 rear-right, CCW
-param set-default CA_ROTOR3_AX  0.625917
-param set-default CA_ROTOR3_AY  0.238883
-param set-default CA_ROTOR3_AZ -0.742404
-
-param set-default CA_ROTOR4_PX  0.210191
-param set-default CA_ROTOR4_PY  0.121353
-param set-default CA_ROTOR4_PZ -0.022000
-param set-default CA_ROTOR4_KM  0.0245499 # M5 front-right, CCW
-param set-default CA_ROTOR4_AX -0.106080
-param set-default CA_ROTOR4_AY -0.661501
-param set-default CA_ROTOR4_AZ -0.742404
-
-param set-default CA_ROTOR5_PX -0.210191
-param set-default CA_ROTOR5_PY -0.121353
-param set-default CA_ROTOR5_PZ -0.022000
-param set-default CA_ROTOR5_KM -0.0245499 # M6 rear-left, CW
-param set-default CA_ROTOR5_AX  0.625917
-param set-default CA_ROTOR5_AY -0.238883
-param set-default CA_ROTOR5_AZ -0.742404
 
 param set-default SIM_GZ_EC_FUNC1 101
 param set-default SIM_GZ_EC_FUNC2 102
@@ -102,33 +42,8 @@ param set-default SIM_GZ_EC_MAX4 1600
 param set-default SIM_GZ_EC_MAX5 1600
 param set-default SIM_GZ_EC_MAX6 1600
 
-# Gazebo applies thrust proportional to rotor speed squared. Convert PX4's
-# normalized thrust command to rotor speed with the inverse square-root model.
+# Gazebo applies thrust proportional to rotor speed squared; keep inverse
+# square-root mapping (also defaulted in 6003 as THR_MDL_FAC 1.0).
 param set-default THR_MDL_FAC 1.0
-
-# Use pseudo-inverse allocation for the custom hex rotor positions and yaw signs.
-param set-default CA_METHOD 0
-
-# With 2.028 kg total mass, six 1600 rad/s rotors, k_f=5.57165e-6 and
-# 0.742404 vertical thrust projection, the calculated hover command is 0.313.
-param set-default MPC_THR_HOVER 0.32
-
-# This rotor geometry has full-rank 6-DoF control effectiveness. Lock NED XYZ
-# after takeoff while manual roll/pitch/yaw commands change attitude; position
-# corrections are realized through body Fx/Fy instead of vehicle tilt.
-param set-default MPC_FA_MODE 2
-param set-default MPC_FA_TILT_MAX 10.0
-param set-default MC_MAN_TILT_TAU 0.25
-
-# Conservative translational limits for the first fully actuated flights.
-param set-default MPC_XY_VEL_MAX 3.0
-param set-default MPC_VEL_MANUAL 2.0
-param set-default MPC_ACC_HOR 2.0
-param set-default MPC_ACC_HOR_MAX 2.0
-param set-default MPC_JERK_MAX 4.0
-param set-default MPC_TILTMAX_AIR 20.0
-
-param set-default MC_YAW_TQ_CUTOFF 0.0
-param set-default MC_YAWRATE_K 0.30
 
 param set-default NAV_DLL_ACT 2

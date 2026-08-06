@@ -383,12 +383,14 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 	// The body-frame command must follow the measured attitude. Do not keep
 	// using an old transform if the estimator stops publishing attitude.
 	if ((_vehicle_attitude.timestamp == 0) || (hrt_elapsed_time(&_vehicle_attitude.timestamp) > 100_ms)) {
+		_full_actuated_attitude_hold_valid = false;
 		return false;
 	}
 
 	matrix::Quatf q_current{_vehicle_attitude.q};
 
 	if (!q_current.isAllFinite() || q_current.norm_squared() < FLT_EPSILON) {
+		_full_actuated_attitude_hold_valid = false;
 		return false;
 	}
 
@@ -400,7 +402,16 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 			return false;
 		}
 
-		q_desired = matrix::Quatf{matrix::Eulerf{0.f, 0.f, local_pos_sp.yaw}};
+		// Keep the roll and pitch that the vehicle had when mode 1 became active.
+		// Position changes are produced exclusively by the independent
+		// three-axis thrust command, while yaw remains independently controllable.
+		if (!_full_actuated_attitude_hold_valid) {
+			_full_actuated_attitude_hold = q_current;
+			_full_actuated_attitude_hold_valid = true;
+		}
+
+		const matrix::Eulerf held_attitude{_full_actuated_attitude_hold};
+		q_desired = matrix::Quatf{matrix::Eulerf{held_attitude.phi(), held_attitude.theta(), local_pos_sp.yaw}};
 
 	} else if (_full_actuated_mode == 2) {
 		if (!_manual_control_setpoint.valid || (_manual_control_setpoint.timestamp == 0)
@@ -548,9 +559,10 @@ void MulticopterPositionControl::Run()
 		vehicle_attitude_s vehicle_attitude{};
 
 		if (_vehicle_attitude_sub.update(&vehicle_attitude)) {
-			// Reinitialize the tilt filter across estimator frame resets.
+			// Reinitialize attitude-dependent states across estimator frame resets.
 			if ((_vehicle_attitude.timestamp != 0)
 			    && (vehicle_attitude.quat_reset_counter != _vehicle_attitude.quat_reset_counter)) {
+				_full_actuated_attitude_hold_valid = false;
 				_full_actuated_tilt_filter_initialized = false;
 			}
 
@@ -565,6 +577,7 @@ void MulticopterPositionControl::Run()
 		// 如果全驱动模式发生变化，则重置全驱动模式状态
 		if (requested_full_actuated_mode != _full_actuated_mode) {
 			_full_actuated_mode = requested_full_actuated_mode;
+			_full_actuated_attitude_hold_valid = false;
 			_full_actuated_position_hold_valid = false;
 			_full_actuated_tilt_filter_initialized = false;
 		}
@@ -575,12 +588,14 @@ void MulticopterPositionControl::Run()
 			if (_vehicle_control_mode_sub.update(&_vehicle_control_mode)) {
 				if (!previous_position_control_enabled && _vehicle_control_mode.flag_multicopter_position_control_enabled) {
 					_time_position_control_enabled = _vehicle_control_mode.timestamp;
+					_full_actuated_attitude_hold_valid = false;
 					_full_actuated_position_hold_valid = false;
 					_full_actuated_tilt_filter_initialized = false;
 
 				} else if (previous_position_control_enabled && !_vehicle_control_mode.flag_multicopter_position_control_enabled) {
 					// clear existing setpoint when controller is no longer active
 					_setpoint = PositionControl::empty_trajectory_setpoint;
+					_full_actuated_attitude_hold_valid = false;
 					_full_actuated_position_hold_valid = false;
 					_full_actuated_tilt_filter_initialized = false;
 				}

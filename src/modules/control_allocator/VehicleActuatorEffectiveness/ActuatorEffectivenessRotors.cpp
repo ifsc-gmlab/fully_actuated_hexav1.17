@@ -110,6 +110,29 @@ void ActuatorEffectivenessRotors::updateParams()
 		case AxisConfiguration::FixedUpwards:
 			axis = Vector3f(0.f, 0.f, -1.f);
 			break;
+
+		case AxisConfiguration::FixedFullyActuatedHexa: {
+			// Hardcoded FRD thrust axes for fully actuated hex (commercial, not exposed as params).
+			// Motor order: 0=M1 right CW, 1=M2 left CCW, 2=M3 front-left CW,
+			//   3=M4 rear-right CCW, 4=M5 front-right CCW, 5=M6 rear-left CW.
+			static constexpr float k_axes[6][3] = {
+				{-0.519837f, -0.422618f, -0.742404f}, // M1
+				{-0.519837f,  0.422618f, -0.742404f}, // M2
+				{-0.106080f,  0.661501f, -0.742404f}, // M3
+				{ 0.625917f,  0.238883f, -0.742404f}, // M4
+				{-0.106080f, -0.661501f, -0.742404f}, // M5
+				{ 0.625917f, -0.238883f, -0.742404f}, // M6
+			};
+
+			if (i < 6) {
+				axis = Vector3f(k_axes[i][0], k_axes[i][1], k_axes[i][2]);
+
+			} else {
+				axis = Vector3f(0.f, 0.f, -1.f);
+			}
+
+			break;
+		}
 		}
 
 		param_get(_param_handles[i].thrust_coef, &_geometry.rotors[i].thrust_coef);
