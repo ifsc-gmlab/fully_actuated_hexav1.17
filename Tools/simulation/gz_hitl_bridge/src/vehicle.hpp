@@ -54,14 +54,21 @@ private:
 
     // MAVLink RX
     void onMavlinkMessage(const mavlink_message_t &msg);
+    void handleStatustext(const mavlink_message_t &msg);
+    void handleSysStatus(const mavlink_message_t &msg);
+    void handleHeartbeat(const mavlink_message_t &msg);
+    void handleCommandAck(const mavlink_message_t &msg);
 
     // MAVLink TX
     void sendHilSensor(uint64_t time_usec);
     void sendHilGps(uint64_t time_usec);
     void sendSystemTime(uint64_t time_usec);
     void sendHeartbeat();
+    void requestFcStreams();
 
     static uint64_t now_usec();
+    static const char *severityName(uint8_t severity);
+    static std::string describeUnhealthy(uint32_t present, uint32_t enabled, uint32_t health);
 
     Config _cfg;
     gz::transport::Node _node;
@@ -78,6 +85,17 @@ private:
     double _gps_lat{0}, _gps_lon{0}, _gps_alt{0};
     float  _gps_vn{0}, _gps_ve{0}, _gps_vd{0};
 
+    // FC health / arming (from SYS_STATUS / HEARTBEAT)
+    bool     _prearm_ok{false};
+    bool     _have_sys_status{false};
+    uint32_t _sensors_present{0};
+    uint32_t _sensors_enabled{0};
+    uint32_t _sensors_health{0};
+    uint32_t _last_unhealthy_mask{0};
+    uint8_t  _fc_base_mode{0};
+    uint8_t  _fc_system_status{0};
+    bool     _have_fc_heartbeat{false};
+
     // Stats
     std::atomic<uint64_t> _last_heartbeat_us{0};
     std::atomic<uint64_t> _hil_sensor_sent{0};
@@ -89,4 +107,5 @@ private:
     std::atomic<bool>     _fc_armed{false};
 
     bool _initialized{false};
+    bool _streams_requested{false};
 };
