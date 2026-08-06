@@ -129,54 +129,6 @@ gz_hitl_bridge/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/build
 .PHONY : gz_hitl_bridge/fast
 
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.o: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.o
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.o
-
-# target to build an object file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.o
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.o
-
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.i: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.i
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.i
-
-# target to preprocess a source file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.i
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.i
-
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.s: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.s
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.s
-
-# target to generate assembly for a file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.s
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.cpp.s
-
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.o: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.o
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.o
-
-# target to build an object file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.o
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.o
-
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.i: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.i
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.i
-
-# target to preprocess a source file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.i
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.i
-
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.s: home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.s
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.s
-
-# target to generate assembly for a file
-home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/gz_hitl_bridge.dir/build.make CMakeFiles/gz_hitl_bridge.dir/home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.s
-.PHONY : home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.cpp.s
-
 src/actuator.o: src/actuator.cpp.o
 .PHONY : src/actuator.o
 
@@ -402,12 +354,6 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... gz_hitl_bridge"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.o"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.i"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/health_and_arming_checks.s"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.o"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.i"
-	@echo "... home/ubuntu22/PX4-Autopilot/src/lib/events/libevents/libs/cpp/parse/parser.s"
 	@echo "... src/actuator.o"
 	@echo "... src/actuator.i"
 	@echo "... src/actuator.s"
