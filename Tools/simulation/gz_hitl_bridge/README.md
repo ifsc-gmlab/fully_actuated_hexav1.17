@@ -335,7 +335,9 @@ gz_hitl_bridge/
 - **Gz IMU** 是 **FLU** (Forward-Left-Up)，HIL_SENSOR 要 **FRD**：accel/gyro 的 Y/Z 取反
 - **Gz mag 插件** 在左手系发 **Gauss**（不是 Tesla，字段名 `field_tesla` 是历史遗留命名）：
   - `x_frd = -y_gz`, `y_frd = -x_gz`, `z_frd = z_gz`
-- **HIL_GPS**：lat/lon int32 单位 1e-7°，alt int32 单位 mm，速度 int16 单位 cm/s
+- **HIL_SENSOR `fields_updated`**：IMU 每次都置 accel/gyro bit；mag/baro **仅在 Gz 新采样到达时**置位（避免 EKF 把锁存值当 250 Hz 新观测）
+- **HIL_GPS**：lat/lon int32 单位 1e-7°，alt int32 单位 mm，速度 int16 单位 cm/s；`time_usec=0`（UTC 未设置，与 GZBridge 一致）；`eph/epv` 按 PX4 解释为水平/垂直精度 cm（约 0.9 / 1.78 m）
+- **SYSTEM_TIME**：`time_unix_usec` 用墙钟，`time_boot_ms` 用单调时钟
 - **气压**：Gz 发 Pa，HIL_SENSOR 要 hPa（÷100）。高度用国际标准大气公式由 Pa 反算
 
 ---

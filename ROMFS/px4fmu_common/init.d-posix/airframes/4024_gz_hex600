@@ -114,8 +114,11 @@ param set-default MPC_THR_HOVER 0.48
 # This rotor geometry has full-rank 6-DoF control effectiveness. Keep the
 # vehicle level and realize horizontal position corrections through body Fx/Fy
 # instead of vehicle tilt.
-param set-default MPC_FA_MODE 1
+param set-default MPC_FA_MODE 0
 param set-default MPC_FA_TILT_MAX 15.0
+param set-default MPC_FA_STAB 1
+param set-default MPC_FA_XY_THR 0.15
+param set-default MPC_FA_XY_RATIO 0.35
 param set-default MC_MAN_TILT_TAU 0.25
 
 # Conservative translational limits for the first fully actuated flights.

@@ -4,9 +4,8 @@
 
 | `MPC_FA_MODE` | 行为 |
 |---:|---|
-| 0 | 标准 tilt 映射 |
-| 1 | 锁 roll/pitch，三轴推力改位置，yaw 可控 |
-| 2 | 锁 XYZ，摇杆控姿态（Pose） |
+| 0 | 锁 roll/pitch，三轴推力改位置，yaw 可控 |
+| 1 | 锁 XYZ，摇杆控姿态（Pose） |
 
 ---
 
@@ -383,11 +382,11 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 
 ```c
 PARAM_DEFINE_INT32(MPC_FA_MODE, 0);
-// 0 标准 / 1 水平全驱动 / 2 Pose
+// 0 水平全驱动 / 1 Pose
 
 PARAM_DEFINE_INT32(MPC_FA_RC_AUX, 0);
 // 0 禁用；1..6 对应 AUX1..6
-// AUX < -0.8 → 0；[-0.2,0.2] → 1；> 0.8 → 2；中间带滞回
+// AUX < -0.2 → 0；> 0.2 → 1；中间带滞回
 
 PARAM_DEFINE_FLOAT(MPC_FA_TILT_MAX, 15.f);
 ```
@@ -509,7 +508,7 @@ param set-default CA_ROTOR_COUNT 6
 # CA_ROTOR*_AX/AY/AZ 已从机架脚本删除（见 §14）
 
 param set-default CA_METHOD 0
-param set-default MPC_FA_MODE 2
+param set-default MPC_FA_MODE 1
 param set-default MPC_FA_TILT_MAX 10.0
 param set-default MC_YAW_TQ_CUTOFF 0.0
 ```
@@ -520,11 +519,11 @@ Gazebo 模型：`Tools/simulation/gz/models/fully_actuated_hexa/`。
 
 ```
 位置/速度 PID → NED 推力 T_N
-  ├─ FA off → thrustToAttitude（倾斜耦合）
-  └─ FA on  → _accelerationControlIndependent()
-              + thrustNedToBody(q_cur, q_des)
-              → (q_d, thrust_body[3])
-                  → att/rate → control_allocator（Fx/Fy/Fz 统一尺度）→ 电机
+  └─ mode 0/1 → _accelerationControlIndependent()
+                 + thrustNedToBody(q_cur, q_des)
+                 → (q_d, thrust_body[3])
+                     → att/rate → control_allocator（Fx/Fy/Fz 统一尺度）→ 电机
+  （姿态无效时回退 thrustToAttitude）
 ```
 
 ## 13. 编译 / 启动
@@ -535,8 +534,9 @@ make px4_sitl gz_fully_actuated_hexa
 CCACHE_DIR=/tmp/px4_ccache cmake --build build/px4_sitl_default -j2
 
 param show MPC_FA_MODE
-param set MPC_FA_MODE 2   # / 0 回退标准 / 1 锁姿态改位置
-param set MPC_FA_RC_AUX 1 # 可选：AUX1 三段开关覆盖
+param set MPC_FA_MODE 0   # 水平全驱动：锁姿态改位置
+param set MPC_FA_MODE 1   # Pose：锁 XYZ，摇杆控姿态
+param set MPC_FA_RC_AUX 1 # 可选：AUX1 两段开关覆盖
 ```
 
 ## 14. 商业化：推力轴 `CA_ROTOR*_AX/AY/AZ` 固件写死

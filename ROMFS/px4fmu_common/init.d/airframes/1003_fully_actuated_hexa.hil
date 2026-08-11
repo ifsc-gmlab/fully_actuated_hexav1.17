@@ -71,8 +71,14 @@ param set-default CA_METHOD 0
 
 # Full-rank 6-DoF geometry: Pose mode locks NED XYZ after takeoff while
 # manual roll/pitch/yaw change attitude; position corrections use body Fx/Fy.
-param set-default MPC_FA_MODE 2
+param set-default MPC_FA_MODE 1
 param set-default MPC_FA_TILT_MAX 10.0
+
+# Stabilized: lock roll/pitch to 0, map sticks to horizontal force.
+# Keep XY small vs |Fz| so motors are not saturated and attitude can hold.
+param set-default MPC_FA_STAB 1
+param set-default MPC_FA_XY_THR 0.15
+param set-default MPC_FA_XY_RATIO 0.35
 
 param set-default MC_YAW_TQ_CUTOFF 0.0
 

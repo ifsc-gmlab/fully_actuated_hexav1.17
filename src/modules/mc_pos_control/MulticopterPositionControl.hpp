@@ -266,8 +266,9 @@ private:
 			const float dt, vehicle_attitude_setpoint_s &attitude_setpoint);
 
 	/**
-	 * Resolve fully actuated mode from MPC_FA_MODE, optionally overridden by RC AUX.
-	 * Keeps the previous mode while the AUX stick is between the switch bands.
+	 * Resolve fully actuated mode (0=hold attitude / 1=Pose) from MPC_FA_MODE,
+	 * optionally overridden by RC AUX. Keeps the previous mode while the AUX
+	 * stick is between the two-position switch bands.
 	 */
 	int32_t resolveFullActuatedMode(int32_t previous_mode) const;
 

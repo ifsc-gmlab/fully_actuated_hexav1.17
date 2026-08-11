@@ -29,7 +29,7 @@
 - `_vtol`：构造时记下是否 VTOL（全驱动逻辑对 VTOL 禁用）
 - `_vehicle_attitude_sub` / `_vehicle_attitude`：订阅当前姿态，供 NED→Body 变换
 - `_manual_control_setpoint_sub` / `_manual_control_setpoint`：Pose 模式读摇杆
-- `_full_actuated_mode`：当前生效模式 0/1/2
+- `_full_actuated_mode`：当前生效模式 0/1（水平全驱动 / Pose）
 - `_full_actuated_position_hold` + `_full_actuated_position_hold_valid`：Pose 锁定的 NED 位置
 - `_full_actuated_tilt_filter` + `_full_actuated_tilt_filter_initialized`：Pose 倾角一阶滤波
 - `_last_full_actuated_warn`：解耦失败告警限频
@@ -43,14 +43,14 @@
 
 **新增函数**
 1. `generateFullActuatedAttitudeSetpoint()`
-   - mode 1：进入模式时锁存四旋翼当前滚转角和俯仰角，偏航仍跟随位置设定值；位置变化仅由三轴独立推力实现
-   - mode 2：摇杆 → roll/pitch（`MPC_FA_TILT_MAX` + `MC_MAN_TILT_TAU` 滤波），再与 yaw 合成 `q_desired`
+   - mode 0：进入模式时锁存当前滚转角和俯仰角，偏航仍跟随位置设定值；位置变化仅由三轴独立推力实现
+   - mode 1：摇杆 → roll/pitch（`MPC_FA_TILT_MAX` + `MC_MAN_TILT_TAU` 滤波），再与 yaw 合成 `q_desired`
    - 调用 `ControlMath::thrustNedToBody(thrust_ned, q_current, q_desired, att_sp)`
    - 写入 `yaw_sp_move_rate`；姿态超时/非法则返回 false
 
-2. `resolveFullActuatedMode()`（工作区新增）
-   - 默认读 `MPC_FA_MODE`
-   - 若 `MPC_FA_RC_AUX=1..6`，用对应 AUX 三段开关覆盖（带滞回）
+2. `resolveFullActuatedMode()`
+   - 默认读 `MPC_FA_MODE`（仅 0/1）
+   - 若 `MPC_FA_RC_AUX=1..6`，用对应 AUX 两段开关覆盖（带滞回）
 
 **修改已有函数**
 1. 构造函数：增加 `_vtol(vtol)` 初始化
@@ -106,9 +106,9 @@
 #### `multicopter_position_control_params.c`
 
 **新增参数定义**
-- `MPC_FA_MODE`（int，默认 0）：0 标准 / 1 水平全驱动 / 2 Pose
+- `MPC_FA_MODE`（int，默认 0）：0 水平全驱动 / 1 Pose
 - `MPC_FA_TILT_MAX`（float，默认 15）：Pose 最大倾角
-- `MPC_FA_RC_AUX`（int，默认 0）：AUX 通道覆盖模式（工作区新增）
+- `MPC_FA_RC_AUX`（int，默认 0）：AUX 通道覆盖模式
 
 ### 2.2 控制分配
 
@@ -123,8 +123,8 @@
 
 | 文件 | 改动 |
 |------|------|
-| `ROMFS/.../airframes/4024_gz_hex600` | hex600 SITL 机架：6 电机倾斜推力轴 + `MPC_FA_MODE=1` |
-| `ROMFS/.../airframes/4025_gz_typhoon_h480` | Typhoon 外观 + hex600 几何：`MPC_FA_MODE=2` |
+| `ROMFS/.../airframes/4024_gz_hex600` | hex600 SITL 机架：6 电机倾斜推力轴 + `MPC_FA_MODE=0` |
+| `ROMFS/.../airframes/4025_gz_typhoon_h480` | Typhoon 外观 + hex600 几何：`MPC_FA_MODE=1` |
 | `ROMFS/.../airframes/CMakeLists.txt` | 注册上述机架 |
 | `Tools/simulation/gz/models/fully_actuated_hexa/` | Gazebo 全驱动六旋翼模型（SDF / meshes） |
 
@@ -156,9 +156,8 @@ att_sp.thrust_body = thrust_body
 
 | `MPC_FA_MODE` | 行为 |
 |---------------|------|
-| 0 | 标准欠驱动映射（回退路径） |
-| 1 | 锁存并保持进入模式时的当前滚转角和俯仰角，偏航仍可控；三轴推力独立改变位置 |
-| 2 | Pose：起飞后锁 XYZ；摇杆控姿态；油门不再改高度 |
+| 0 | 锁存并保持进入模式时的当前滚转角和俯仰角，偏航仍可控；三轴推力独立改变位置 |
+| 1 | Pose：起飞后锁 XYZ；摇杆控姿态；油门不再改高度 |
 
 配套逻辑：
 - `generateFullActuatedAttitudeSetpoint()` 生成解耦输出
@@ -170,14 +169,13 @@ att_sp.thrust_body = thrust_body
 
 | 参数 | 默认 | 含义 |
 |------|------|------|
-| `MPC_FA_MODE` | 0 | 0=标准 / 1=水平全驱动 / 2=Pose |
+| `MPC_FA_MODE` | 0 | 0=水平全驱动 / 1=Pose |
 | `MPC_FA_TILT_MAX` | 15° | Pose 模式摇杆最大倾角 |
-| `MPC_FA_RC_AUX` | 0 | AUX1–6 三段开关覆盖模式（工作区未提交） |
+| `MPC_FA_RC_AUX` | 0 | AUX1–6 两段开关覆盖模式 |
 
 `MPC_FA_RC_AUX` 映射（归一化 AUX）：
-- `< -0.8` → mode 0
-- `[-0.2, 0.2]` → mode 1
-- `> 0.8` → mode 2
+- `< -0.2` → mode 0（水平全驱动）
+- `> 0.2` → mode 1（Pose）
 - 中间带滞回保持上一模式
 
 ---
@@ -195,11 +193,11 @@ att_sp.thrust_body = thrust_body
 **4024 hex600**
 - 6 电机固定倾转（α≈35°, β≈±25°）
 - `CA_ROTOR*_AX/AY/AZ` 为 PX4 FRD 推力方向
-- `MPC_FA_MODE=1`，`MPC_FA_TILT_MAX=15`
+- `MPC_FA_MODE=0`，`MPC_FA_TILT_MAX=15`
 
 **4025 typhoon_h480**
 - 外观 Typhoon，控制几何同全驱动 hex
-- `MPC_FA_MODE=2`，`MPC_FA_TILT_MAX=10`
+- `MPC_FA_MODE=1`，`MPC_FA_TILT_MAX=10`
 - 偏航相关：`MC_YAW_TQ_CUTOFF=0`，`MC_YAWRATE_K=0.30`（抑抖）
 
 ---
@@ -232,4 +230,5 @@ att_sp.thrust_body = thrust_body
 
 相对 `b7ae1ae55b` 尚未提交：
 1. 函数改名：`thrustToIndependentAttitude` → `thrustNedToBody`
-2. 新增 `MPC_FA_RC_AUX` + `resolveFullActuatedMode()`（RC 三段开关覆盖模式）
+2. 新增 `MPC_FA_RC_AUX` + `resolveFullActuatedMode()`（RC 两段开关覆盖模式）
+3. 删除可选标准欠驱动：`MPC_FA_MODE` 仅 0/1 两种全驱动位置模式

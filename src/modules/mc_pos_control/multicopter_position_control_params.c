@@ -49,15 +49,16 @@
 PARAM_DEFINE_FLOAT(MPC_THR_HOVER, 0.5f);
 
 /**
- * Fully actuated position-control output mode
+ * Fully actuated position-control flight mode
  *
- * Selects whether the position controller maps horizontal thrust to vehicle
- * tilt, or sends all three body-frame thrust components independently from the
- * attitude setpoint. The independent modes require a control-effectiveness
- * matrix with controllable Fx, Fy, Fz, roll, pitch and yaw axes.
+ * Selects one of two fully actuated Position-mode behaviors. Both send all
+ * three body-frame thrust components independently from the attitude setpoint
+ * and require a control-effectiveness matrix with controllable Fx, Fy, Fz,
+ * roll, pitch and yaw axes.
  *
- * Mode 1 commands level roll and pitch while retaining the normal yaw setpoint.
- * Mode 2 is for manual Position flight after takeoff: it holds the captured XYZ
+ * Mode 0 holds the roll/pitch captured on mode entry and retains the normal yaw
+ * setpoint; position changes use independent three-axis thrust.
+ * Mode 1 is for manual Position flight after takeoff: it holds the captured XYZ
  * position and maps roll, pitch and yaw sticks to attitude commands. Throttle
  * is ignored while the XYZ position is locked.
  *
@@ -67,11 +68,10 @@ PARAM_DEFINE_FLOAT(MPC_THR_HOVER, 0.5f);
  * When MPC_FA_RC_AUX is set to a non-zero AUX channel, that RC switch overrides
  * this parameter.
  *
- * @value 0 Standard tilt-based multicopter mapping
- * @value 1 Independent thrust, level roll/pitch and controlled yaw
- * @value 2 Hold XYZ position and control attitude with manual sticks
+ * @value 0 Independent thrust, hold entry roll/pitch and controlled yaw
+ * @value 1 Hold XYZ position and control attitude with manual sticks
  * @min 0
- * @max 2
+ * @max 1
  * @group Multicopter Position Control
  */
 PARAM_DEFINE_INT32(MPC_FA_MODE, 0);
@@ -82,10 +82,9 @@ PARAM_DEFINE_INT32(MPC_FA_MODE, 0);
  * Selects which manual_control_setpoint AUXn input overrides MPC_FA_MODE.
  * Map the physical RC switch with RC_MAP_AUXn first.
  *
- * Three-position switch mapping (normalized AUX in [-1, 1]):
- *   AUX < -0.8           -> mode 0 (standard)
- *   AUX in [-0.2, 0.2]   -> mode 1 (independent thrust, level attitude)
- *   AUX >  0.8           -> mode 2 (hold XYZ and control attitude)
+ * Two-position switch mapping (normalized AUX in [-1, 1]):
+ *   AUX < -0.2           -> mode 0 (independent thrust, hold entry attitude)
+ *   AUX >  0.2           -> mode 1 (hold XYZ and control attitude)
  * Values between the bands keep the previous mode (hysteresis).
  * If the AUX input is invalid or stale, MPC_FA_MODE is used.
  *
@@ -106,7 +105,7 @@ PARAM_DEFINE_INT32(MPC_FA_RC_AUX, 0);
  * Maximum manual tilt in fully actuated pose mode
  *
  * Limits the combined roll and pitch command generated from manual sticks when
- * MPC_FA_MODE is set to 2. A conservative limit is required because the
+ * MPC_FA_MODE is set to 1. A conservative limit is required because the
  * position controller must generate lateral body thrust to hold XYZ while the
  * vehicle is tilted.
  *

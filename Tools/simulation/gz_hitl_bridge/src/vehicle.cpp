@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -13,11 +14,16 @@ extern "C" {
 }
 
 namespace {
-constexpr uint32_t HIL_SENSOR_FIELDS =
-    (1u<<0) | (1u<<1) | (1u<<2) |   // accel xyz
-    (1u<<3) | (1u<<4) | (1u<<5) |   // gyro xyz
-    (1u<<6) | (1u<<7) | (1u<<8) |   // mag xyz
-    (1u<<9) | (1u<<11) | (1u<<12);  // abs_p, press_alt, temp
+// HIL_SENSOR fields_updated bits (matches PX4 SensorSource / MAVLink HIL_SENSOR_UPDATED_*).
+constexpr uint32_t kHilAccel = (1u << 0) | (1u << 1) | (1u << 2);
+constexpr uint32_t kHilGyro  = (1u << 3) | (1u << 4) | (1u << 5);
+constexpr uint32_t kHilMag   = (1u << 6) | (1u << 7) | (1u << 8);
+constexpr uint32_t kHilBaro  = (1u << 9) | (1u << 11) | (1u << 12); // abs_p, press_alt, temp
+
+// GPS accuracy reported through HIL_GPS eph/epv. PX4 mavlink_receiver treats these
+// as centimetres of position accuracy (→ metres after *1e-2), not MAVLink HDOP.
+constexpr uint16_t kGpsEphCm = 90;   // 0.9 m — align with GZBridge / typical F9P
+constexpr uint16_t kGpsEpvCm = 178;  // 1.78 m
 
 struct SensorBit {
     uint32_t bit;
@@ -85,9 +91,14 @@ bool looksLikeArmingOrPreflight(const std::string &text) {
 Vehicle::Vehicle(Config cfg) : _cfg(std::move(cfg)) {}
 Vehicle::~Vehicle() { shutdown(); }
 
-uint64_t Vehicle::now_usec() {
+uint64_t Vehicle::monotonic_usec() {
     using namespace std::chrono;
     return duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+uint64_t Vehicle::unix_usec() {
+    using namespace std::chrono;
+    return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 bool Vehicle::init() {
@@ -167,13 +178,13 @@ void Vehicle::imuCallback(const gz::msgs::IMU &msg) {
         _acc_x = ax;  _acc_y = ay;  _acc_z = az;
         _gyro_x = gx; _gyro_y = gy; _gyro_z = gz;
     }
-    sendHilSensor(now_usec());
+    sendHilSensor(monotonic_usec());
 
-    const uint64_t t = now_usec();
+    const uint64_t t = monotonic_usec();
     if (t - _last_heartbeat_us > 1'000'000ULL) {
         _last_heartbeat_us = t;
         sendHeartbeat();
-        sendSystemTime(t);
+        sendSystemTime();
     }
 }
 
@@ -185,6 +196,7 @@ void Vehicle::magCallback(const gz::msgs::Magnetometer &msg) {
     _mag_x = -static_cast<float>(msg.field_tesla().y());
     _mag_y = -static_cast<float>(msg.field_tesla().x());
     _mag_z =  static_cast<float>(msg.field_tesla().z());
+    _mag_fresh = true;
 }
 
 void Vehicle::baroCallback(const gz::msgs::FluidPressure &msg) {
@@ -196,6 +208,7 @@ void Vehicle::baroCallback(const gz::msgs::FluidPressure &msg) {
     std::lock_guard<std::mutex> lk(_state_mutex);
     _abs_pressure_hpa = pa / 100.0f;
     _pressure_alt_m   = alt;
+    _baro_fresh = true;
 }
 
 void Vehicle::navSatCallback(const gz::msgs::NavSat &msg) {
@@ -210,7 +223,7 @@ void Vehicle::navSatCallback(const gz::msgs::NavSat &msg) {
         _gps_vd  = -static_cast<float>(msg.velocity_up());
         _gps_valid = true;
     }
-    sendHilGps(now_usec());
+    sendHilGps();
 }
 
 // ===========================================================================
@@ -218,18 +231,39 @@ void Vehicle::navSatCallback(const gz::msgs::NavSat &msg) {
 // ===========================================================================
 void Vehicle::sendHilSensor(uint64_t time_usec) {
     mavlink_hil_sensor_t hil{};
+    uint32_t fields = kHilAccel | kHilGyro;
     {
         std::lock_guard<std::mutex> lk(_state_mutex);
         hil.xacc = _acc_x; hil.yacc = _acc_y; hil.zacc = _acc_z;
         hil.xgyro = _gyro_x; hil.ygyro = _gyro_y; hil.zgyro = _gyro_z;
-        hil.xmag = _mag_x; hil.ymag = _mag_y; hil.zmag = _mag_z;
-        hil.abs_pressure = _abs_pressure_hpa;
-        hil.pressure_alt = _pressure_alt_m;
-        hil.temperature  = _temperature_c;
+
+        // Only mark mag/baro updated when a new Gz sample arrived. Resending
+        // latched values at IMU rate with fields_updated set makes EKF fuse
+        // duplicate observations (~250 Hz) and degrades the estimate.
+        if (_mag_fresh) {
+            hil.xmag = _mag_x; hil.ymag = _mag_y; hil.zmag = _mag_z;
+            fields |= kHilMag;
+            _mag_fresh = false;
+        }
+
+        if (_baro_fresh) {
+            hil.abs_pressure = _abs_pressure_hpa;
+            hil.pressure_alt = _pressure_alt_m;
+            hil.temperature  = _temperature_c;
+            fields |= kHilBaro;
+            _baro_fresh = false;
+        } else {
+            // Keep latched values in the payload for debugging; bits omit them.
+            hil.abs_pressure = _abs_pressure_hpa;
+            hil.pressure_alt = _pressure_alt_m;
+            hil.temperature  = _temperature_c;
+            hil.xmag = _mag_x; hil.ymag = _mag_y; hil.zmag = _mag_z;
+        }
     }
     hil.diff_pressure  = 0.0f;
     hil.time_usec      = time_usec;
-    hil.fields_updated = HIL_SENSOR_FIELDS;
+    hil.fields_updated = fields;
+    hil.id             = 0;
 
     mavlink_message_t msg;
     mavlink_msg_hil_sensor_encode(_cfg.transport->system_id(),
@@ -237,7 +271,7 @@ void Vehicle::sendHilSensor(uint64_t time_usec) {
     if (_cfg.transport->send(msg)) _hil_sensor_sent.fetch_add(1);
 }
 
-void Vehicle::sendHilGps(uint64_t time_usec) {
+void Vehicle::sendHilGps() {
     mavlink_hil_gps_t gps{};
     {
         std::lock_guard<std::mutex> lk(_state_mutex);
@@ -249,15 +283,23 @@ void Vehicle::sendHilGps(uint64_t time_usec) {
         gps.vd  = static_cast<int16_t>(_gps_vd  * 100.0f);
         float vel = std::sqrt(_gps_vn*_gps_vn + _gps_ve*_gps_ve + _gps_vd*_gps_vd);
         gps.vel = static_cast<uint16_t>(vel * 100.0f);
-        float cog = std::atan2(_gps_ve, _gps_vn) * 180.0f / static_cast<float>(M_PI);
-        if (cog < 0) cog += 360.0f;
-        gps.cog = static_cast<uint16_t>(cog * 100.0f);
+        // COG is undefined when nearly stationary.
+        if (vel < 0.1f) {
+            gps.cog = UINT16_MAX;
+        } else {
+            float cog = std::atan2(_gps_ve, _gps_vn) * 180.0f / static_cast<float>(M_PI);
+            if (cog < 0) cog += 360.0f;
+            gps.cog = static_cast<uint16_t>(cog * 100.0f);
+        }
     }
-    gps.time_usec          = time_usec;
+    // Match GZBridge / sensor_gps_sim: leave UTC unset (0). PX4 maps this to
+    // sensor_gps.time_utc_usec; a fake monotonic clock confuses consumers.
+    gps.time_usec          = 0;
     gps.fix_type           = 3;
-    gps.eph                = 100;
-    gps.epv                = 150;
+    gps.eph                = kGpsEphCm;
+    gps.epv                = kGpsEpvCm;
     gps.satellites_visible = 12;
+    gps.id                 = 0;
 
     mavlink_message_t msg;
     mavlink_msg_hil_gps_encode(_cfg.transport->system_id(),
@@ -265,10 +307,10 @@ void Vehicle::sendHilGps(uint64_t time_usec) {
     _cfg.transport->send(msg);
 }
 
-void Vehicle::sendSystemTime(uint64_t time_usec) {
+void Vehicle::sendSystemTime() {
     mavlink_system_time_t st{};
-    st.time_unix_usec = time_usec;
-    st.time_boot_ms   = static_cast<uint32_t>(time_usec / 1000);
+    st.time_unix_usec = unix_usec();
+    st.time_boot_ms   = static_cast<uint32_t>(monotonic_usec() / 1000);
     mavlink_message_t msg;
     mavlink_msg_system_time_encode(_cfg.transport->system_id(),
                                    _cfg.transport->component_id(), &msg, &st);
@@ -494,7 +536,7 @@ void Vehicle::handleCommandAck(const mavlink_message_t &msg) {
     const char *result = "UNKNOWN";
     switch (ack.result) {
         case MAV_RESULT_ACCEPTED: result = "ACCEPTED"; break;
-        case MAV_RESULT_TEMPORARY_REJECTED: result = "TEMPORARY_REJECTED"; break;
+        case MAV_RESULT_TEMPORARILY_REJECTED: result = "TEMPORARILY_REJECTED"; break;
         case MAV_RESULT_DENIED: result = "DENIED"; break;
         case MAV_RESULT_UNSUPPORTED: result = "UNSUPPORTED"; break;
         case MAV_RESULT_FAILED: result = "FAILED"; break;

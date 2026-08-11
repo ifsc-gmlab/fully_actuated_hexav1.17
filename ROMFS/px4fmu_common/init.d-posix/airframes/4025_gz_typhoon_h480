@@ -120,8 +120,11 @@ param set-default MPC_THR_HOVER 0.42
 # This rotor geometry has full-rank 6-DoF control effectiveness. Lock NED XYZ
 # after takeoff while manual roll/pitch/yaw commands change attitude; position
 # corrections are realized through body Fx/Fy instead of vehicle tilt.
-param set-default MPC_FA_MODE 2
+param set-default MPC_FA_MODE 1
 param set-default MPC_FA_TILT_MAX 10.0
+param set-default MPC_FA_STAB 1
+param set-default MPC_FA_XY_THR 0.15
+param set-default MPC_FA_XY_RATIO 0.35
 param set-default MC_MAN_TILT_TAU 0.25
 
 # Conservative translational limits for the first fully actuated flights.

@@ -168,6 +168,11 @@ private:
 		(ParamFloat<px4::params::MPC_THR_HOVER>) _param_mpc_thr_hover,
 		(ParamInt<px4::params::MPC_THR_CURVE>) _param_mpc_thr_curve,
 
+		/* Fully actuated Stabilized mode: lock roll/pitch, map sticks to Fx/Fy */
+		(ParamInt<px4::params::MPC_FA_STAB>) _param_mpc_fa_stab,
+		(ParamFloat<px4::params::MPC_FA_XY_THR>) _param_mpc_fa_xy_thr,
+		(ParamFloat<px4::params::MPC_FA_XY_RATIO>) _param_mpc_fa_xy_ratio,
+
 		(ParamFloat<px4::params::COM_SPOOLUP_TIME>) _param_com_spoolup_time
 	)
 };

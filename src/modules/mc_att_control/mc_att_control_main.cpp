@@ -150,52 +150,106 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt)
 	_stick_yaw.generateYawSetpoint(attitude_setpoint.yaw_sp_move_rate, _yaw_setpoint_stabilized, yaw_stick_input, yaw, dt,
 				       _unaided_heading);
 
-	/*
-	 * Input mapping for roll & pitch setpoints
-	 * ----------------------------------------
-	 * We control the following 2 angles:
-	 * - tilt angle, given by sqrt(roll*roll + pitch*pitch)
-	 * - the direction of the maximum tilt in the XY-plane, which also defines the direction of the motion
-	 *
-	 * This allows a simple limitation of the tilt angle, the vehicle flies towards the direction that the stick
-	 * points to, and changes of the stick input are linear.
-	 */
+	// Make sure there's a valid attitude quaternion with no yaw error when yaw is unlocked (NAN)
+	const float yaw_setpoint = PX4_ISFINITE(_yaw_setpoint_stabilized) ? _yaw_setpoint_stabilized : yaw;
+
 	_man_roll_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 	_man_pitch_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 
-	// we want to fly towards the direction of (roll, pitch)
-	Vector2f v = Vector2f(_man_roll_input_filter.update(_manual_control_setpoint.roll * _man_tilt_max),
-			      -_man_pitch_input_filter.update(_manual_control_setpoint.pitch * _man_tilt_max));
-	float v_norm = v.norm(); // the norm of v defines the tilt angle
+	if (_param_mpc_fa_stab.get() && !_vtol) {
+		/*
+		 * Fully actuated Stabilized mode
+		 * ------------------------------
+		 * Keep the vehicle level (roll = pitch = 0). Map sticks to a horizontal
+		 * force in the yaw-setpoint frame, then rotate into body thrust with the
+		 * *current* attitude so a small tilt does not turn body-Fx into an
+		 * amplifying world-vertical component. Cap |Fxy| by both MPC_FA_XY_THR
+		 * and MPC_FA_XY_RATIO*|Fz| to leave torque headroom for attitude hold.
+		 */
+		const float thrust_z = -throttle_curve(_manual_control_setpoint.throttle);
+		const float xy_thr_abs = math::constrain(_param_mpc_fa_xy_thr.get(), 0.f, 1.f);
+		const float xy_thr_ratio = math::constrain(_param_mpc_fa_xy_ratio.get(), 0.f, 1.f);
+		const float xy_thr_max = math::min(xy_thr_abs, xy_thr_ratio * fabsf(thrust_z));
 
-	if (v_norm > _man_tilt_max) { // limit to the configured maximum tilt angle
-		v *= _man_tilt_max / v_norm;
+		Vector2f thrust_xy_sp(_man_pitch_input_filter.update(_manual_control_setpoint.pitch * xy_thr_max),
+				      _man_roll_input_filter.update(_manual_control_setpoint.roll * xy_thr_max));
+		const float thrust_xy_norm = thrust_xy_sp.norm();
+
+		if ((xy_thr_max > FLT_EPSILON) && (thrust_xy_norm > xy_thr_max)) {
+			thrust_xy_sp *= xy_thr_max / thrust_xy_norm;
+		}
+
+		// Heading-frame FRD force: x forward, y right, z down.
+		const Vector3f thrust_heading{thrust_xy_sp(0), thrust_xy_sp(1), thrust_z};
+		const Quatf q_yaw{Eulerf{0.f, 0.f, yaw_setpoint}};
+		const Vector3f thrust_ned = q_yaw.rotateVector(thrust_heading);
+
+		Quatf q_current{q};
+
+		if (!q_current.isAllFinite() || (q_current.norm_squared() < FLT_EPSILON)) {
+			q_current = q_yaw;
+
+		} else {
+			q_current.normalize();
+		}
+
+		const Vector3f thrust_body = q_current.rotateVectorInverse(thrust_ned);
+
+		const Quatf q_sp{Eulerf{0.f, 0.f, yaw_setpoint}};
+		q_sp.copyTo(attitude_setpoint.q_d);
+
+		if (thrust_body.isAllFinite()) {
+			thrust_body.copyTo(attitude_setpoint.thrust_body);
+
+		} else {
+			attitude_setpoint.thrust_body[0] = 0.f;
+			attitude_setpoint.thrust_body[1] = 0.f;
+			attitude_setpoint.thrust_body[2] = thrust_z;
+		}
+
+	} else {
+		/*
+		 * Input mapping for roll & pitch setpoints
+		 * ----------------------------------------
+		 * We control the following 2 angles:
+		 * - tilt angle, given by sqrt(roll*roll + pitch*pitch)
+		 * - the direction of the maximum tilt in the XY-plane, which also defines the direction of the motion
+		 *
+		 * This allows a simple limitation of the tilt angle, the vehicle flies towards the direction that the stick
+		 * points to, and changes of the stick input are linear.
+		 */
+		// we want to fly towards the direction of (roll, pitch)
+		Vector2f v = Vector2f(_man_roll_input_filter.update(_manual_control_setpoint.roll * _man_tilt_max),
+				      -_man_pitch_input_filter.update(_manual_control_setpoint.pitch * _man_tilt_max));
+		float v_norm = v.norm(); // the norm of v defines the tilt angle
+
+		if (v_norm > _man_tilt_max) { // limit to the configured maximum tilt angle
+			v *= _man_tilt_max / v_norm;
+		}
+
+		Quatf q_sp_rp = AxisAnglef(v(0), v(1), 0.f);
+		// The axis angle can change the yaw as well (noticeable at higher tilt angles).
+		// This is the formula by how much the yaw changes:
+		//   let a := tilt angle, b := atan(y/x) (direction of maximum tilt)
+		//   yaw = atan(-2 * sin(b) * cos(b) * sin^2(a/2) / (1 - 2 * cos^2(b) * sin^2(a/2))).
+		const Quatf q_sp_yaw(cosf(yaw_setpoint / 2.f), 0.f, 0.f, sinf(yaw_setpoint / 2.f));
+
+		if (_vtol) {
+			// Modify the setpoints for roll and pitch such that they reflect the user's intention even
+			// if a large yaw error(yaw_sp - yaw) is present. In the presence of a yaw error constructing
+			// an attitude setpoint from the yaw setpoint will lead to unexpected attitude behaviour from
+			// the user's view as the tilt will not be aligned with the heading of the vehicle.
+
+			AttitudeControlMath::correctTiltSetpointForYawError(q_sp_rp, q, q_sp_yaw);
+		}
+
+		// Align the desired tilt with the yaw setpoint
+		Quatf q_sp = q_sp_yaw * q_sp_rp;
+
+		q_sp.copyTo(attitude_setpoint.q_d);
+
+		attitude_setpoint.thrust_body[2] = -throttle_curve(_manual_control_setpoint.throttle);
 	}
-
-	Quatf q_sp_rp = AxisAnglef(v(0), v(1), 0.f);
-	// Make sure there's a valid attitude quaternion with no yaw error when yaw is unlocked (NAN)
-	const float yaw_setpoint = PX4_ISFINITE(_yaw_setpoint_stabilized) ? _yaw_setpoint_stabilized : yaw;
-	// The axis angle can change the yaw as well (noticeable at higher tilt angles).
-	// This is the formula by how much the yaw changes:
-	//   let a := tilt angle, b := atan(y/x) (direction of maximum tilt)
-	//   yaw = atan(-2 * sin(b) * cos(b) * sin^2(a/2) / (1 - 2 * cos^2(b) * sin^2(a/2))).
-	const Quatf q_sp_yaw(cosf(yaw_setpoint / 2.f), 0.f, 0.f, sinf(yaw_setpoint / 2.f));
-
-	if (_vtol) {
-		// Modify the setpoints for roll and pitch such that they reflect the user's intention even
-		// if a large yaw error(yaw_sp - yaw) is present. In the presence of a yaw error constructing
-		// an attitude setpoint from the yaw setpoint will lead to unexpected attitude behaviour from
-		// the user's view as the tilt will not be aligned with the heading of the vehicle.
-
-		AttitudeControlMath::correctTiltSetpointForYawError(q_sp_rp, q, q_sp_yaw);
-	}
-
-	// Align the desired tilt with the yaw setpoint
-	Quatf q_sp = q_sp_yaw * q_sp_rp;
-
-	q_sp.copyTo(attitude_setpoint.q_d);
-
-	attitude_setpoint.thrust_body[2] = -throttle_curve(_manual_control_setpoint.throttle);
 
 	attitude_setpoint.timestamp = hrt_absolute_time();
 	_vehicle_attitude_setpoint_pub.publish(attitude_setpoint);

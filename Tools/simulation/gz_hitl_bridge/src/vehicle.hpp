@@ -61,12 +61,14 @@ private:
 
     // MAVLink TX
     void sendHilSensor(uint64_t time_usec);
-    void sendHilGps(uint64_t time_usec);
-    void sendSystemTime(uint64_t time_usec);
+    void sendHilGps();
+    void sendSystemTime();
     void sendHeartbeat();
     void requestFcStreams();
 
-    static uint64_t now_usec();
+    // Monotonic time for sensor/boot timestamps; wall clock for SYSTEM_TIME.
+    static uint64_t monotonic_usec();
+    static uint64_t unix_usec();
     static const char *severityName(uint8_t severity);
     static std::string describeUnhealthy(uint32_t present, uint32_t enabled, uint32_t health);
 
@@ -81,6 +83,10 @@ private:
     float _abs_pressure_hpa{1013.25f};
     float _pressure_alt_m{0.0f};
     float _temperature_c{25.0f};
+    // Set by mag/baro callbacks; consumed (cleared) when included in HIL_SENSOR
+    // so EKF only sees real update rates instead of IMU-rate duplicates.
+    bool   _mag_fresh{false};
+    bool   _baro_fresh{false};
     bool   _gps_valid{false};
     double _gps_lat{0}, _gps_lon{0}, _gps_alt{0};
     float  _gps_vn{0}, _gps_ve{0}, _gps_vd{0};

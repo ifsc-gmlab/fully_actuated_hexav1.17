@@ -133,7 +133,7 @@ PARAM_DEFINE_FLOAT(MPC_JERK_MAX, 8.f);
 /**
  * Deadzone for sticks in manual piloted modes
  *
- * Used by fully-actuated Pose mode stick shaping (MPC_FA_MODE=2).
+ * Used by fully-actuated Pose mode stick shaping (MPC_FA_MODE=1).
  * Does not apply to manual throttle and direct attitude piloting by stick.
  *
  * @min 0
@@ -147,7 +147,7 @@ PARAM_DEFINE_FLOAT(MPC_HOLD_DZ, 0.1f);
 /**
  * Manual position control stick exponential curve sensitivity
  *
- * Used by fully-actuated Pose mode stick shaping (MPC_FA_MODE=2).
+ * Used by fully-actuated Pose mode stick shaping (MPC_FA_MODE=1).
  * The higher the value the less sensitivity the stick has around zero
  * while still reaching the maximum value with full stick deflection.
  *

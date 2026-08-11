@@ -397,12 +397,12 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 	q_current.normalize();
 	matrix::Quatf q_desired{};
 
-	if (_full_actuated_mode == 1) {
+	if (_full_actuated_mode == 0) {
 		if (!PX4_ISFINITE(local_pos_sp.yaw)) {
 			return false;
 		}
 
-		// Keep the roll and pitch that the vehicle had when mode 1 became active.
+		// Keep the roll and pitch that the vehicle had when mode 0 became active.
 		// Position changes are produced exclusively by the independent
 		// three-axis thrust command, while yaw remains independently controllable.
 		if (!_full_actuated_attitude_hold_valid) {
@@ -413,7 +413,7 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 		const matrix::Eulerf held_attitude{_full_actuated_attitude_hold};
 		q_desired = matrix::Quatf{matrix::Eulerf{held_attitude.phi(), held_attitude.theta(), local_pos_sp.yaw}};
 
-	} else if (_full_actuated_mode == 2) {
+	} else if (_full_actuated_mode == 1) {
 		if (!_manual_control_setpoint.valid || (_manual_control_setpoint.timestamp == 0)
 		    || (hrt_elapsed_time(&_manual_control_setpoint.timestamp) > 500_ms)
 		    || !PX4_ISFINITE(_manual_control_setpoint.roll)
@@ -468,7 +468,7 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 
 int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mode) const
 {
-	const int32_t param_mode = math::constrain(_param_mpc_fa_mode.get(), (int32_t)0, (int32_t)2);
+	const int32_t param_mode = math::constrain(_param_mpc_fa_mode.get(), (int32_t)0, (int32_t)1);
 	const int32_t aux_channel = _param_mpc_fa_rc_aux.get();
 
 	if ((aux_channel < 1) || (aux_channel > 6)) {
@@ -515,18 +515,15 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 		return param_mode;
 	}
 
-	// Three-position switch bands with hysteresis between them.
-	if (aux < -0.8f) {
+	// Two-position switch bands with hysteresis around center.
+	if (aux < -0.2f) {
 		return 0;
 
-	} else if ((aux >= -0.2f) && (aux <= 0.2f)) {
+	} else if (aux > 0.2f) {
 		return 1;
-
-	} else if (aux > 0.8f) {
-		return 2;
 	}
 
-	return math::constrain(previous_mode, (int32_t)0, (int32_t)2);
+	return math::constrain(previous_mode, (int32_t)0, (int32_t)1);
 }
 
 void MulticopterPositionControl::Run()
@@ -571,7 +568,7 @@ void MulticopterPositionControl::Run()
 
 		_manual_control_setpoint_sub.update(&_manual_control_setpoint);
 
-		// 获取全驱动模式（可由 RC AUX 三段开关覆盖 MPC_FA_MODE）
+		// 获取全驱动模式（可由 RC AUX 两段开关覆盖 MPC_FA_MODE）
 		const int32_t requested_full_actuated_mode = resolveFullActuatedMode(_full_actuated_mode);
 
 		// 如果全驱动模式发生变化，则重置全驱动模式状态
@@ -712,7 +709,7 @@ void MulticopterPositionControl::Run()
 			// Manual pose mode dedicates the sticks to attitude control and keeps
 			// the complete NED position captured after takeoff. Before takeoff the
 			// normal Position task remains active so throttle can initiate flight.
-			const bool manual_pose_mode_active = !_vtol && (_full_actuated_mode == 2)
+			const bool manual_pose_mode_active = !_vtol && (_full_actuated_mode == 1)
 							     && _vehicle_control_mode.flag_control_manual_enabled
 							     && flying && !flying_but_ground_contact;
 
@@ -734,14 +731,14 @@ void MulticopterPositionControl::Run()
 			}
 
 			const bool full_actuated_requested = !_vtol
-							     && (_full_actuated_mode == 1
+							     && (_full_actuated_mode == 0
 									     || (manual_pose_mode_active && _full_actuated_position_hold_valid));
 			const matrix::Quatf current_attitude{_vehicle_attitude.q};
 			const bool current_attitude_valid = (_vehicle_attitude.timestamp != 0)
 							    && (hrt_elapsed_time(&_vehicle_attitude.timestamp) <= 100_ms)
 							    && current_attitude.isAllFinite()
 							    && (current_attitude.norm_squared() > FLT_EPSILON);
-			const bool manual_attitude_input_valid = (_full_actuated_mode != 2)
+			const bool manual_attitude_input_valid = (_full_actuated_mode != 1)
 					|| (_manual_control_setpoint.valid
 					    && (_manual_control_setpoint.timestamp != 0)
 					    && (hrt_elapsed_time(&_manual_control_setpoint.timestamp) <= 500_ms)

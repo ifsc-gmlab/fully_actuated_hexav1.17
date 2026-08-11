@@ -158,3 +158,50 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_MAX, 200.0f);
  * @group Multicopter Position Control
  */
 PARAM_DEFINE_FLOAT(MC_MAN_TILT_TAU, 0.0f);
+
+/**
+ * Fully actuated Stabilized mode
+ *
+ * When enabled in Stabilized (manual attitude) mode, desired roll and pitch are
+ * locked to zero while the roll/pitch sticks command horizontal thrust in the
+ * yaw setpoint frame (forward/right), transformed into body Fx/Fy/Fz using the
+ * current attitude. Yaw stick keeps the normal Stabilized mapping.
+ *
+ * Requires a control-effectiveness matrix with controllable Fx and Fy.
+ * Ignored for VTOL attitude control.
+ *
+ * @boolean
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_INT32(MPC_FA_STAB, 0);
+
+/**
+ * Max lateral thrust in fully actuated Stabilized mode
+ *
+ * Absolute magnitude limit for the horizontal thrust command from the sticks
+ * when MPC_FA_STAB is enabled. The effective limit is also capped by
+ * MPC_FA_XY_RATIO * |Fz| so large side force is not requested at low throttle
+ * (which saturates motors and loses attitude authority).
+ *
+ * @min 0.0
+ * @max 1.0
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MPC_FA_XY_THR, 0.15f);
+
+/**
+ * Lateral-to-vertical thrust ratio in fully actuated Stabilized mode
+ *
+ * Caps horizontal thrust to this fraction of the commanded |Fz|. Keep well
+ * below the geometric tan(tilt) of the rotors so torque authority remains for
+ * holding level attitude.
+ *
+ * @min 0.0
+ * @max 1.0
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MPC_FA_XY_RATIO, 0.35f);
