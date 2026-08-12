@@ -744,7 +744,7 @@ void MulticopterPositionControl::Run()
 					    && (hrt_elapsed_time(&_manual_control_setpoint.timestamp) <= 500_ms)
 					    && PX4_ISFINITE(_manual_control_setpoint.roll)
 					    && PX4_ISFINITE(_manual_control_setpoint.pitch));
-			_control.setIndependentThrustControl(full_actuated_requested && current_attitude_valid
+			_control.setDirectThrustControl(full_actuated_requested && current_attitude_valid
 							     && manual_attitude_input_valid);
 
 			// limit tilt during takeoff ramupup

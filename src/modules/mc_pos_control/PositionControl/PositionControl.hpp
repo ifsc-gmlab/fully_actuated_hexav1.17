@@ -127,7 +127,7 @@ public:
 	 * attitude and must not pass the force direction through the conventional
 	 * multicopter tilt cone.
 	 */
-	void setIndependentThrustControl(bool enabled) { _independent_thrust_control = enabled; }
+	void setDirectThrustControl(bool enabled) { _direct_thrust_control = enabled; }
 
 	/**
 	 * Set the normalized hover thrust
@@ -209,7 +209,7 @@ private:
 	void _positionControl(); ///< Position proportional control
 	void _velocityControl(const float dt); ///< Velocity PID control
 	void _accelerationControl(); ///< Acceleration setpoint processing
-	void _accelerationControlIndependent(); ///< Direct acceleration-to-3D-thrust mapping for fully actuated vehicles
+	void _accelerationControlDirect(); ///< Direct acceleration-to-3D-thrust mapping for fully actuated vehicles
 
 	// Gains
 	matrix::Vector3f _gain_pos_p; ///< Position control proportional gain
@@ -228,7 +228,7 @@ private:
 
 	float _hover_thrust{}; ///< Thrust [HOVER_THRUST_MIN, HOVER_THRUST_MAX] with which the vehicle hovers not accelerating down or up with level orientation
 	bool _decouple_horizontal_and_vertical_acceleration{true}; ///< Ignore vertical acceleration setpoint to remove its effect on the tilt setpoint
-	bool _independent_thrust_control{false}; ///< Do not constrain horizontal force through the multicopter tilt cone
+	bool _direct_thrust_control{false}; ///< Do not constrain horizontal force through the multicopter tilt cone
 
 	// States
 	matrix::Vector3f _pos; /**< current position */

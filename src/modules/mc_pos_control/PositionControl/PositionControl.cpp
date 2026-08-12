@@ -149,8 +149,8 @@ void PositionControl::_velocityControl(const float dt)
 	// No control input from setpoints or corresponding states which are NAN
 	ControlMath::addIfNotNanVector3f(_acc_sp, acc_sp_velocity);
 
-	if (_independent_thrust_control) {
-		_accelerationControlIndependent();
+	if (_direct_thrust_control) {
+		_accelerationControlDirect();
 
 	} else {
 		_accelerationControl();
@@ -226,7 +226,7 @@ void PositionControl::_accelerationControl()
 	_thr_sp = body_z * collective_thrust;
 }
 
-void PositionControl::_accelerationControlIndependent()
+void PositionControl::_accelerationControlDirect()
 {
 	// A fully actuated vehicle realizes the complete NED force vector without
 	// changing attitude. Map every acceleration axis with the same hover-thrust

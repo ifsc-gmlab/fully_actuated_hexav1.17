@@ -136,7 +136,7 @@ TEST(ControlMathTest, ThrottleAttitudeMapping)
 	EXPECT_FLOAT_EQ(att.thrust_body[2], -1.f);
 }
 
-TEST(ControlMathTest, IndependentThrustAttitudeMappingLevel)
+TEST(ControlMathTest, DirectThrustAttitudeMappingLevel)
 {
 	const Vector3f thrust_ned{0.2f, -0.1f, -0.7f};
 	const Quatf q_current{};
@@ -155,7 +155,7 @@ TEST(ControlMathTest, IndependentThrustAttitudeMappingLevel)
 	EXPECT_NEAR(desired_euler.psi(), M_PI_2_F, 1e-6f);
 }
 
-TEST(ControlMathTest, IndependentThrustAttitudeMappingRotated)
+TEST(ControlMathTest, DirectThrustAttitudeMappingRotated)
 {
 	const Vector3f thrust_ned{0.25f, -0.15f, -0.65f};
 	const Quatf q_current{Eulerf{0.25f, -0.2f, 1.1f}};
@@ -177,7 +177,7 @@ TEST(ControlMathTest, IndependentThrustAttitudeMappingRotated)
 	EXPECT_NEAR(fabsf(q_output.dot(q_desired)), 1.f, 1e-6f);
 }
 
-TEST(ControlMathTest, IndependentThrustAttitudeMappingRejectsInvalidInput)
+TEST(ControlMathTest, DirectThrustAttitudeMappingRejectsInvalidInput)
 {
 	vehicle_attitude_setpoint_s att{};
 	const Vector3f valid_thrust{0.f, 0.f, -0.5f};

@@ -149,10 +149,10 @@ TEST_F(PositionControlBasicTest, TiltLimit)
 	_position_control.setTiltLimit(1.f);  // restore original
 }
 
-TEST_F(PositionControlBasicTest, IndependentThrustBypassesTiltCone)
+TEST_F(PositionControlBasicTest, DirectThrustBypassesTiltCone)
 {
 	_position_control.setTiltLimit(0.1f);
-	_position_control.setIndependentThrustControl(true);
+	_position_control.setDirectThrustControl(true);
 	Vector3f(5.f, 0.f, 0.f).copyTo(_input_setpoint.acceleration);
 
 	ASSERT_TRUE(runController());
@@ -163,15 +163,15 @@ TEST_F(PositionControlBasicTest, IndependentThrustBypassesTiltCone)
 	EXPECT_GT(atan2f(thrust(0), -thrust(2)), 0.1f);
 
 	// Disabling the fully actuated path restores the conventional tilt cone.
-	_position_control.setIndependentThrustControl(false);
+	_position_control.setDirectThrustControl(false);
 	ASSERT_TRUE(runController());
 	const Vector3f conventional_thrust(_output_setpoint.thrust);
 	EXPECT_LE(atan2f(conventional_thrust(0), -conventional_thrust(2)), 0.10001f);
 }
 
-TEST_F(PositionControlBasicTest, IndependentThrustMapsAxesDirectly)
+TEST_F(PositionControlBasicTest, DirectThrustMapsAxesDirectly)
 {
-	_position_control.setIndependentThrustControl(true);
+	_position_control.setDirectThrustControl(true);
 	Vector3f(2.f, -1.f, 1.f).copyTo(_input_setpoint.acceleration);
 
 	ASSERT_TRUE(runController());
