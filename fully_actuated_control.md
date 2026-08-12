@@ -1,11 +1,12 @@
-# 全驱动 Position 控制 — 代码改动
+# 全驱动控制 — 代码改动
 
-目标：位置环输出完整 NED 三维推力，姿态设定值独立；`Fx/Fy/Fz` 统一归一化尺度。
+目标：位置环输出完整 NED 三维推力，姿态设定值独立；Stabilized 可锁平并摇杆直映水平力；`Fx/Fy/Fz` 统一归一化尺度；量产机架推力轴固件写死。
 
-| `MPC_FA_MODE` | 行为 |
-|---:|---|
-| 0 | 锁 roll/pitch，三轴推力改位置，yaw 可控 |
-| 1 | 锁 XYZ，摇杆控姿态（Pose） |
+| 参数 / 模式 | 行为 |
+|---|---|
+| `MPC_FA_MODE=0` | 锁 roll/pitch，三轴推力改位置，yaw 可控 |
+| `MPC_FA_MODE=1` | Pose：锁 XYZ，摇杆控姿态 |
+| `MPC_FA_STAB=1` | Stabilized：锁平，摇杆 → 水平力（姿态环） |
 
 ---
 
@@ -18,6 +19,8 @@ bool thrustNedToBody(const matrix::Vector3f &thr_sp_ned,
 ```
 
 ## 2. `ControlMath.cpp` — 新增函数
+
+NED 坐标系下的期望推力向量转换到机体坐标系，并填充 vehicle_attitude_setpoint_s 结构体
 
 ```cpp
 bool thrustNedToBody(const Vector3f &thr_sp_ned, const Quatf &q_current,
@@ -53,11 +56,11 @@ bool thrustNedToBody(const Vector3f &thr_sp_ned, const Quatf &q_current,
 ## 3. `PositionControl.hpp` — 新增
 
 ```cpp
-void setIndependentThrustControl(bool enabled) { _independent_thrust_control = enabled; }
+void setDirectThrustControl(bool enabled) { _direct_thrust_control = enabled; }
 
 // private:
-void _accelerationControlIndependent();
-bool _independent_thrust_control{false};
+void _accelerationControlDirect();
+bool _direct_thrust_control{false};
 ```
 
 ## 4. `PositionControl.cpp` — 修改 + 新增
@@ -65,18 +68,20 @@ bool _independent_thrust_control{false};
 **修改 `_velocityControl()`：**
 
 ```cpp
-	if (_independent_thrust_control) {
-		_accelerationControlIndependent();
+	if (_direct_thrust_control) {
+		_accelerationControlDirect();
 
 	} else {
 		_accelerationControl();
 	}
 ```
 
-**新增：**
+ PositionControl::_accelerationControlDirect()
+
+水平力和垂直力独立产生，不依赖倾斜。每个轴用同一个 _hover_thrust / g 系数直接映射，没有 tilt 限制、没有投影补偿。
 
 ```cpp
-void PositionControl::_accelerationControlIndependent()
+void PositionControl::_accelerationControlDirect()
 {
 	const float acceleration_to_thrust = _hover_thrust / CONSTANTS_ONE_G;
 	_thr_sp.xy() = _acc_sp.xy() * acceleration_to_thrust;
@@ -135,6 +140,14 @@ MulticopterPositionControl::MulticopterPositionControl(bool vtol) :
 
 ### 6.2 `generateFullActuatedAttitudeSetpoint()` — 新增
 
+全驱动模式下姿态和推力解耦：推力由位置环直接算出（`_accelerationControlDirect`），姿态由此函数独立生成。设计两种模式：
+
+**Mode 0 — 锁平全驱动（水平力控位置）：** 进入模式时锁存当前 roll/pitch，之后保持水平，yaw 跟随位置环设定值。水平力完全由旋翼直接产生，不需倾转机身。适合高精度悬停、大风抗扰、快速水平机动。
+
+**Mode 1 — Pose（摇杆控姿态、锁 XYZ）：** 摇杆 roll/pitch 经指数曲线 + 死区 + 低通滤波后直接控制机体倾角（受 `MPC_FA_TILT_MAX` 限幅），位置环锁 XYZ，yaw 跟设定值。适合手动全驱动飞行或需要主动倾转机身的场景。
+
+两种模式最终都调用 `thrustNedToBody`，用**当前姿态**（`q_current`）将 NED 推力转到机体坐标系，避免力-姿态耦合。
+
 ```cpp
 bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 	const vehicle_local_position_setpoint_s &local_pos_sp, const float dt,
@@ -155,7 +168,8 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 	q_current.normalize();
 	matrix::Quatf q_desired{};
 
-	if (_full_actuated_mode == 1) {
+	if (_full_actuated_mode == 0) {
+		// 锁存进入模式时的 roll/pitch；yaw 跟随位置设定值
 		if (!PX4_ISFINITE(local_pos_sp.yaw)) {
 			return false;
 		}
@@ -168,7 +182,8 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 		const matrix::Eulerf held_attitude{_full_actuated_attitude_hold};
 		q_desired = matrix::Quatf{matrix::Eulerf{held_attitude.phi(), held_attitude.theta(), local_pos_sp.yaw}};
 
-	} else if (_full_actuated_mode == 2) {
+	} else if (_full_actuated_mode == 1) {
+		// Pose：摇杆 → roll/pitch（限幅 + 滤波），再与 yaw 合成
 		if (!_manual_control_setpoint.valid || (_manual_control_setpoint.timestamp == 0)
 		    || (hrt_elapsed_time(&_manual_control_setpoint.timestamp) > 500_ms)
 		    || !PX4_ISFINITE(_manual_control_setpoint.roll)
@@ -224,10 +239,12 @@ bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
 
 ### 6.3 `resolveFullActuatedMode()` — 新增
 
+将模式转化的映射到aux开关上
+
 ```cpp
 int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mode) const
 {
-	const int32_t param_mode = math::constrain(_param_mpc_fa_mode.get(), (int32_t)0, (int32_t)2);
+	const int32_t param_mode = math::constrain(_param_mpc_fa_mode.get(), (int32_t)0, (int32_t)1);
 	const int32_t aux_channel = _param_mpc_fa_rc_aux.get();
 
 	if ((aux_channel < 1) || (aux_channel > 6)) {
@@ -255,15 +272,15 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 		return param_mode;
 	}
 
-	if (aux < -0.8f) {
+	// 两段开关 + 中心滞回
+	if (aux < -0.2f) {
 		return 0;
-	} else if ((aux >= -0.2f) && (aux <= 0.2f)) {
+
+	} else if (aux > 0.2f) {
 		return 1;
-	} else if (aux > 0.8f) {
-		return 2;
 	}
 
-	return math::constrain(previous_mode, (int32_t)0, (int32_t)2);
+	return math::constrain(previous_mode, (int32_t)0, (int32_t)1);
 }
 ```
 
@@ -295,16 +312,13 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 			_full_actuated_tilt_filter_initialized = false;
 		}
 
-		// 位置控使能开关变化时同样清 lock / tilt 滤波：
-		// _full_actuated_attitude_hold_valid = false;
-		// _full_actuated_position_hold_valid = false;
-		// _full_actuated_tilt_filter_initialized = false;
+		// 位置控使能开关变化时同样清 lock / tilt 滤波
 ```
 
 **Pose 锁位 + 独立推力开关：**
 
 ```cpp
-			const bool manual_pose_mode_active = !_vtol && (_full_actuated_mode == 2)
+			const bool manual_pose_mode_active = !_vtol && (_full_actuated_mode == 1)
 							     && _vehicle_control_mode.flag_control_manual_enabled
 							     && flying && !flying_but_ground_contact;
 
@@ -326,20 +340,20 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 			}
 
 			const bool full_actuated_requested = !_vtol
-							     && (_full_actuated_mode == 1
+							     && (_full_actuated_mode == 0
 									     || (manual_pose_mode_active && _full_actuated_position_hold_valid));
 			const matrix::Quatf current_attitude{_vehicle_attitude.q};
 			const bool current_attitude_valid = (_vehicle_attitude.timestamp != 0)
 							    && (hrt_elapsed_time(&_vehicle_attitude.timestamp) <= 100_ms)
 							    && current_attitude.isAllFinite()
 							    && (current_attitude.norm_squared() > FLT_EPSILON);
-			const bool manual_attitude_input_valid = (_full_actuated_mode != 2)
+			const bool manual_attitude_input_valid = (_full_actuated_mode != 1)
 					|| (_manual_control_setpoint.valid
 					    && (_manual_control_setpoint.timestamp != 0)
 					    && (hrt_elapsed_time(&_manual_control_setpoint.timestamp) <= 500_ms)
 					    && PX4_ISFINITE(_manual_control_setpoint.roll)
 					    && PX4_ISFINITE(_manual_control_setpoint.pitch));
-			_control.setIndependentThrustControl(full_actuated_requested && current_attitude_valid
+			_control.setDirectThrustControl(full_actuated_requested && current_attitude_valid
 							     && manual_attitude_input_valid);
 ```
 
@@ -378,27 +392,79 @@ int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mod
 	}
 ```
 
-## 7. `multicopter_position_control_params.c` — 新增参数
+## 7. Stabilized 全驱动 — `mc_att_control`
+
+位置环之外：Stabilized（手动姿态）下可选锁平，摇杆映射水平力。
+
+### 7.1 `mc_att_control_params.c` — 新增参数
+
+```c
+PARAM_DEFINE_INT32(MPC_FA_STAB, 0);
+// 1：Stabilized 锁 roll/pitch=0，摇杆控水平推力
+
+PARAM_DEFINE_FLOAT(MPC_FA_XY_THR, 0.15f);
+// |Fxy| 绝对上限
+
+PARAM_DEFINE_FLOAT(MPC_FA_XY_RATIO, 0.35f);
+// |Fxy| 另受 MPC_FA_XY_RATIO * |Fz| 限制，保留力矩裕度
+```
+
+### 7.2 `mc_att_control.hpp` — 参数绑定
+
+```cpp
+		(ParamInt<px4::params::MPC_FA_STAB>) _param_mpc_fa_stab,
+		(ParamFloat<px4::params::MPC_FA_XY_THR>) _param_mpc_fa_xy_thr,
+		(ParamFloat<px4::params::MPC_FA_XY_RATIO>) _param_mpc_fa_xy_ratio,
+```
+
+### 7.3 `mc_att_control_main.cpp` — `generate_attitude_setpoint()`
+
+`MPC_FA_STAB && !_vtol` 时：
+
+```cpp
+		const float thrust_z = -throttle_curve(_manual_control_setpoint.throttle);
+		const float xy_thr_abs = math::constrain(_param_mpc_fa_xy_thr.get(), 0.f, 1.f);
+		const float xy_thr_ratio = math::constrain(_param_mpc_fa_xy_ratio.get(), 0.f, 1.f);
+		const float xy_thr_max = math::min(xy_thr_abs, xy_thr_ratio * fabsf(thrust_z));
+
+		Vector2f thrust_xy_sp(_man_pitch_input_filter.update(_manual_control_setpoint.pitch * xy_thr_max),
+				      _man_roll_input_filter.update(_manual_control_setpoint.roll * xy_thr_max));
+		// ... 限幅 ...
+
+		// Heading-frame FRD → NED → body（用当前姿态，避免小倾角放大垂向力）
+		const Vector3f thrust_heading{thrust_xy_sp(0), thrust_xy_sp(1), thrust_z};
+		const Quatf q_yaw{Eulerf{0.f, 0.f, yaw_setpoint}};
+		const Vector3f thrust_ned = q_yaw.rotateVector(thrust_heading);
+		const Vector3f thrust_body = q_current.rotateVectorInverse(thrust_ned);
+
+		const Quatf q_sp{Eulerf{0.f, 0.f, yaw_setpoint}}; // 锁平
+		q_sp.copyTo(attitude_setpoint.q_d);
+		thrust_body.copyTo(attitude_setpoint.thrust_body);
+```
+
+否则走原有倾斜映射。Yaw 摇杆仍用标准 Stabilized 逻辑。
+
+## 8. `multicopter_position_control_params.c` — 新增参数
 
 ```c
 PARAM_DEFINE_INT32(MPC_FA_MODE, 0);
-// 0 水平全驱动 / 1 Pose
+// 0 水平全驱动 / 1 Pose（@max 1）
 
 PARAM_DEFINE_INT32(MPC_FA_RC_AUX, 0);
 // 0 禁用；1..6 对应 AUX1..6
-// AUX < -0.2 → 0；> 0.2 → 1；中间带滞回
+// AUX < -0.2 → 0；> 0.2 → 1；中间滞回
 
 PARAM_DEFINE_FLOAT(MPC_FA_TILT_MAX, 15.f);
 ```
 
-## 8. `multicopter_position_mode_params.c` — 回补（1.17 Pose 摇杆整形需要）
+## 9. `multicopter_position_mode_params.c` — 回补（1.17 Pose 摇杆整形需要）
 
 ```c
 PARAM_DEFINE_FLOAT(MPC_HOLD_DZ, 0.1f);
 PARAM_DEFINE_FLOAT(MPC_XY_MAN_EXPO, 0.6f);
 ```
 
-## 9. 控制分配 — `Fx/Fy/Fz` 统一尺度
+## 10. 控制分配 — `Fx/Fy/Fz` 统一尺度
 
 ### `ControlAllocationPseudoInverse.cpp` — 替换推力归一化段
 
@@ -459,87 +525,48 @@ PARAM_DEFINE_FLOAT(MPC_XY_MAN_EXPO, 0.6f);
 		}
 ```
 
-## 10. 单元测试 — 新增用例
+## 11. 机架与 SITL
 
-### `ControlMathTest.cpp`
+### 12.1
+`6003_fully_actuated_hexa` + `4026_gz_fully_actuated_hexa`
 
-```cpp
-TEST(ControlMathTest, IndependentThrustAttitudeMappingLevel)
-{
-	const Vector3f thrust_ned{0.2f, -0.1f, -0.7f};
-	const Quatf q_current{};
-	const Quatf q_desired{Eulerf{0.f, 0.f, M_PI_2_F}};
-	vehicle_attitude_setpoint_s att{};
 
-	ASSERT_TRUE(thrustNedToBody(thrust_ned, q_current, q_desired, att));
-	EXPECT_NEAR(att.thrust_body[0], thrust_ned(0), 1e-6f);
-	EXPECT_NEAR(att.thrust_body[1], thrust_ned(1), 1e-6f);
-	EXPECT_NEAR(att.thrust_body[2], thrust_ned(2), 1e-6f);
-	...
-}
-
-TEST(ControlMathTest, IndependentThrustAttitudeMappingRotated) { ... }
-TEST(ControlMathTest, IndependentThrustAttitudeMappingRejectsInvalidInput) { ... }
-```
-
-### `PositionControlTest.cpp`
-
-```cpp
-TEST_F(PositionControlBasicTest, IndependentThrustBypassesTiltCone) { ... }
-TEST_F(PositionControlBasicTest, IndependentThrustMapsAxesDirectly) { ... }
-```
-
-### `ControlAllocationPseudoInverseTest.cpp`
-
-```cpp
-TEST(ControlAllocationTest, ThrustVectorNormalizationPreservesDirection) { ... }
-TEST(ControlAllocationTest, ThrustVectorNormalizationUsesAvailableAxis) { ... }
-```
-
-## 11. 机架 `6003_fully_actuated_hexa` / `4026_gz_fully_actuated_hexa`
-
-量产机架脚本：`ROMFS/px4fmu_common/init.d/airframes/6003_fully_actuated_hexa`
-SITL 包装：`ROMFS/.../init.d-posix/airframes/4026_gz_fully_actuated_hexa`（source 6003）
 
 ```sh
 param set-default CA_AIRFRAME 16   # Fully Actuated Hexarotor（推力轴固件写死）
 param set-default CA_ROTOR_COUNT 6
 # 仅保留位置 / 转向：CA_ROTOR*_PX/PY/PZ/KM
-# CA_ROTOR*_AX/AY/AZ 已从机架脚本删除（见 §14）
+# CA_ROTOR*_AX/AY/AZ 已从机架脚本删除（见 §15）
 
 param set-default CA_METHOD 0
 param set-default MPC_FA_MODE 1
 param set-default MPC_FA_TILT_MAX 10.0
+param set-default MPC_FA_STAB 1
+param set-default MPC_FA_XY_THR 0.15
+param set-default MPC_FA_XY_RATIO 0.35
 param set-default MC_YAW_TQ_CUTOFF 0.0
 ```
 
-Gazebo 模型：`Tools/simulation/gz/models/fully_actuated_hexa/`。
+Gazebo 模型：`Tools/simulation/gz/models/fully_actuated_hexa/`（或 submodule `Tools/simulation/gz`）。
 
-## 12. 控制链路
 
-```
-位置/速度 PID → NED 推力 T_N
-  └─ mode 0/1 → _accelerationControlIndependent()
-                 + thrustNedToBody(q_cur, q_des)
-                 → (q_d, thrust_body[3])
-                     → att/rate → control_allocator（Fx/Fy/Fz 统一尺度）→ 电机
-  （姿态无效时回退 thrustToAttitude）
-```
 
-## 13. 编译 / 启动
+## 12. 编译 / 启动（SITL）
 
 ```sh
 make px4_sitl gz_fully_actuated_hexa
 # 或
-CCACHE_DIR=/tmp/px4_ccache cmake --build build/px4_sitl_default -j2
+# make px4_sitl gz_hex600
+# make px4_sitl gz_typhoon_h480
 
 param show MPC_FA_MODE
 param set MPC_FA_MODE 0   # 水平全驱动：锁姿态改位置
 param set MPC_FA_MODE 1   # Pose：锁 XYZ，摇杆控姿态
 param set MPC_FA_RC_AUX 1 # 可选：AUX1 两段开关覆盖
+param set MPC_FA_STAB 1   # Stabilized 全驱动水平力
 ```
 
-## 14. 商业化：推力轴 `CA_ROTOR*_AX/AY/AZ` 固件写死
+## 13. 商业化：推力轴 `CA_ROTOR*_AX/AY/AZ` 固件写死
 
 目标：全矢量六旋翼的推力轴方向不进参数、不在 QGC 展示，避免被改。
 
@@ -547,15 +574,15 @@ param set MPC_FA_RC_AUX 1 # 可选：AUX1 两段开关覆盖
 
 新增 `CA_AIRFRAME = 16`（Fully Actuated Hexarotor），轴向量改为 C++ 常量；普通 `Multirotor(0)` 仍可读参数，互不影响。
 
-| 文件　　　　　　　　　　　　　　　　　　　 | 改动　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
-| --------------------------------------------| -------------------------------------------------------------------|
-| `ActuatorEffectivenessRotors.hpp`　　　　　| `AxisConfiguration` 增加 `FixedFullyActuatedHexa`　　　　　　　　 |
-| `ActuatorEffectivenessRotors.cpp`　　　　　| `k_axes[6][3]` 硬编码 FRD 推力轴；该模式下不 `param_get` AX/AY/AZ |
-| `ActuatorEffectivenessMultirotor.hpp/.cpp` | 构造函数可传入 `AxisConfiguration`　　　　　　　　　　　　　　　　|
-| `ControlAllocator.hpp`　　　　　　　　　　 | `EffectivenessSource::FULLY_ACTUATED_HEXA = 16`　　　　　　　　　 |
-| `ControlAllocator.cpp`　　　　　　　　　　 | case 16 → Multirotor + `FixedFullyActuatedHexa`　　　　　　　　　 |
-| `control_allocator/module.yaml`　　　　　　| 枚举增加 16；type 16 执行器 UI **无** Axis X/Y/Z（仅位置 + KM）　 |
-| `6003_fully_actuated_hexa`　　　　　　　　 | `CA_AIRFRAME 16`；删除全部 `CA_ROTOR*_AX/AY/AZ`　　　　　　　　　 |
+| 文件 | 改动 |
+|------|------|
+| `ActuatorEffectivenessRotors.hpp` | `AxisConfiguration` 增加 `FixedFullyActuatedHexa` |
+| `ActuatorEffectivenessRotors.cpp` | `k_axes[6][3]` 硬编码 FRD 推力轴；该模式下不 `param_get` AX/AY/AZ |
+| `ActuatorEffectivenessMultirotor.hpp/.cpp` | 构造函数可传入 `AxisConfiguration` |
+| `ControlAllocator.hpp` | `EffectivenessSource::FULLY_ACTUATED_HEXA = 16` |
+| `ControlAllocator.cpp` | case 16 → Multirotor + `FixedFullyActuatedHexa` |
+| `control_allocator/module.yaml` | 枚举增加 16；type 16 执行器 UI **无** Axis X/Y/Z（仅位置 + KM） |
+| `6003_fully_actuated_hexa` | `CA_AIRFRAME 16`；删除全部 `CA_ROTOR*_AX/AY/AZ` |
 
 ### 硬编码轴（与原机架参数一致，FRD）
 
@@ -575,5 +602,5 @@ static constexpr float k_axes[6][3] = {
 
 - **改轴**：改 `k_axes` 后重新编译烧录，不能再靠 QGC / `param set`。
 - **QGC**：选 `CA_AIRFRAME=16` 时执行器页不显示 Axis；位置 `PX/PY/PZ`、转向 `KM` 仍可配。
-- **参数元数据**：`CA_ROTOR*_AX/AY/AZ` 定义仍保留（UUV / Spacecraft 等机型还要用）；本机架路径不读、不展示。
+- **参数元数据**：`CA_ROTOR*_AX/AY/AZ` 定义仍保留（UUV / Spacecraft / 4024/4025 等还要用）；本机架路径不读、不展示。
 - 旧闪存若残留 Axis 参数可忽略；建议确认 `CA_AIRFRAME` 为 16，必要时参数重置。
