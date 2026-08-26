@@ -37,6 +37,7 @@
 
 #pragma once
 
+#include "FullyActuatedControl.hpp"
 #include "PositionControl/PositionControl.hpp"
 #include "Takeoff/Takeoff.hpp"
 #include "GotoControl/GotoControl.hpp"
@@ -59,10 +60,8 @@
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
 #include <uORB/topics/hover_thrust_estimate.h>
-#include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/trajectory_setpoint.h>
-#include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/vehicle_constraints.h>
 #include <uORB/topics/vehicle_control_mode.h>
@@ -101,15 +100,14 @@ private:
 	uORB::Publication<vehicle_attitude_setpoint_s>	     _vehicle_attitude_setpoint_pub{ORB_ID(vehicle_attitude_setpoint)};
 	uORB::Publication<vehicle_local_position_setpoint_s> _local_pos_sp_pub{ORB_ID(vehicle_local_position_setpoint)};	/**< vehicle local position setpoint publication */
 	const bool _vtol;
+	FullyActuatedControl _fully_actuated_control;
 
 	uORB::SubscriptionCallbackWorkItem _local_pos_sub{this, ORB_ID(vehicle_local_position)};	/**< vehicle local position */
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
 	uORB::Subscription _hover_thrust_estimate_sub{ORB_ID(hover_thrust_estimate)};
-	uORB::Subscription _manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
 	uORB::Subscription _trajectory_setpoint_sub{ORB_ID(trajectory_setpoint)};
-	uORB::Subscription _vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
 	uORB::Subscription _vehicle_constraints_sub{ORB_ID(vehicle_constraints)};
 	uORB::Subscription _vehicle_control_mode_sub{ORB_ID(vehicle_control_mode)};
 	uORB::Subscription _vehicle_land_detected_sub{ORB_ID(vehicle_land_detected)};
@@ -119,15 +117,7 @@ private:
 
 	trajectory_setpoint_s _setpoint{PositionControl::empty_trajectory_setpoint};
 	trajectory_setpoint_s _last_valid_setpoint{PositionControl::empty_trajectory_setpoint};
-	manual_control_setpoint_s _manual_control_setpoint{};
-	vehicle_attitude_s _vehicle_attitude{};
 	vehicle_control_mode_s _vehicle_control_mode{};
-	matrix::Quatf _full_actuated_attitude_hold{};
-	matrix::Vector3f _full_actuated_position_hold{};
-	bool _full_actuated_attitude_hold_valid{false};
-	bool _full_actuated_position_hold_valid{false};
-	bool _full_actuated_tilt_filter_initialized{false};
-	int32_t _full_actuated_mode{0};
 
 	vehicle_constraints_s _vehicle_constraints {
 		.timestamp = 0,
@@ -161,9 +151,6 @@ private:
 		(ParamFloat<px4::params::MPC_Z_VEL_MAX_DN>) _param_mpc_z_vel_max_dn,
 		(ParamFloat<px4::params::MPC_TILTMAX_AIR>)  _param_mpc_tiltmax_air,
 		(ParamFloat<px4::params::MPC_THR_HOVER>)    _param_mpc_thr_hover,
-		(ParamInt<px4::params::MPC_FA_MODE>)         _param_mpc_fa_mode,
-		(ParamInt<px4::params::MPC_FA_RC_AUX>)       _param_mpc_fa_rc_aux,
-		(ParamFloat<px4::params::MPC_FA_TILT_MAX>)   _param_mpc_fa_tilt_max,
 		(ParamBool<px4::params::MPC_USE_HTE>)       _param_mpc_use_hte,
 		(ParamBool<px4::params::MPC_ACC_DECOUPLE>)  _param_mpc_acc_decouple,
 
@@ -171,9 +158,6 @@ private:
 		(ParamFloat<px4::params::MPC_VEL_NF_FRQ>)   _param_mpc_vel_nf_frq,
 		(ParamFloat<px4::params::MPC_VEL_NF_BW>)    _param_mpc_vel_nf_bw,
 		(ParamFloat<px4::params::MPC_VELD_LP>)      _param_mpc_veld_lp,
-		(ParamFloat<px4::params::MC_MAN_TILT_TAU>)  _param_mc_man_tilt_tau,
-		(ParamFloat<px4::params::MPC_HOLD_DZ>)       _param_mpc_hold_dz,
-		(ParamFloat<px4::params::MPC_XY_MAN_EXPO>)   _param_mpc_xy_man_expo,
 
 		// Takeoff / Land
 		(ParamFloat<px4::params::COM_SPOOLUP_TIME>) _param_com_spoolup_time, /**< time to let motors spool up after arming */
@@ -221,13 +205,11 @@ private:
 
 	AlphaFilter<matrix::Vector2f> _vel_deriv_xy_lp_filter{};
 	AlphaFilter<float> _vel_deriv_z_lp_filter{};
-	AlphaFilter<matrix::Vector2f> _full_actuated_tilt_filter{};
 
 	GotoControl _goto_control; ///< class for handling smooth goto position setpoints
 	PositionControl _control; ///< class for core PID position control
 
 	hrt_abstime _last_warn{0}; /**< timer when the last warn message was sent out */
-	hrt_abstime _last_full_actuated_warn{0};
 
 	bool _hover_thrust_initialized{false};
 
@@ -260,17 +242,6 @@ private:
 	 * Check for validity of positon/velocity states.
 	 */
 	PositionControlStates set_vehicle_states(const vehicle_local_position_s &local_pos, const float dt_s);
-
-	/** Generate decoupled attitude and 3D body-thrust output for a fully actuated vehicle. */
-	bool generateFullActuatedAttitudeSetpoint(const vehicle_local_position_setpoint_s &local_pos_sp,
-			const float dt, vehicle_attitude_setpoint_s &attitude_setpoint);
-
-	/**
-	 * Resolve fully actuated mode (0=hold attitude / 1=Pose) from MPC_FA_MODE,
-	 * optionally overridden by RC AUX. Keeps the previous mode while the AUX
-	 * stick is between the two-position switch bands.
-	 */
-	int32_t resolveFullActuatedMode(int32_t previous_mode) const;
 
 	/**
 	 * Generate setpoint to bridge no executable setpoint being available.

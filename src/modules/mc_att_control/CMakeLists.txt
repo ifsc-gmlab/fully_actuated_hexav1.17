@@ -39,6 +39,9 @@ px4_add_module(
 	COMPILE_FLAGS
 		${MAX_CUSTOM_OPT_LEVEL}
 	SRCS
+		FullyActuatedAttitudeControl.cpp
+		FullyActuatedAttitudeControl.hpp
+		FullyActuatedControlMath.hpp
 		mc_att_control_main.cpp
 		mc_att_control.hpp
 	DEPENDS
@@ -47,3 +50,5 @@ px4_add_module(
 		px4_work_queue
 		StickYaw
 	)
+
+px4_add_unit_gtest(SRC FullyActuatedControlMathTest.cpp)

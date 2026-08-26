@@ -88,8 +88,6 @@ px4_add_romfs_files(
 	4019_gz_x500_gimbal
 	4020_gz_tiltrotor
 	4021_gz_x500_flow
-	4024_gz_hex600
-	4025_gz_typhoon_h480
 	4026_gz_fully_actuated_hexa
 
 	6011_gazebo-classic_typhoon_h480
@@ -113,6 +111,8 @@ px4_add_romfs_files(
 
 	17001_flightgear_tf-g1
 	17002_flightgear_tf-g2
+
+	22000_gz_fully_actuated_hexa_arm
 
 	50000_gz_rover_differential
 	51000_gz_rover_ackermann

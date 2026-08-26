@@ -41,6 +41,7 @@
 
 #include <gtest/gtest.h>
 #include <ControlAllocationPseudoInverse.hpp>
+#include <ControlAllocationPseudoInverseFullyActuated.hpp>
 
 using namespace matrix;
 
@@ -94,7 +95,7 @@ TEST(ControlAllocationMetricTest, AllZeroCase)
 
 TEST(ControlAllocationTest, ThrustVectorNormalizationPreservesDirection)
 {
-	ControlAllocationPseudoInverse method;
+	ControlAllocationPseudoInverseFullyActuated method;
 	matrix::Matrix<float, 6, 16> effectiveness;
 	matrix::Vector<float, 16> actuator_trim;
 	matrix::Vector<float, 16> linearization_point;
@@ -134,7 +135,7 @@ TEST(ControlAllocationTest, ThrustVectorNormalizationPreservesDirection)
 
 TEST(ControlAllocationTest, ThrustVectorNormalizationUsesAvailableAxis)
 {
-	ControlAllocationPseudoInverse method;
+	ControlAllocationPseudoInverseFullyActuated method;
 	matrix::Matrix<float, 6, 16> effectiveness;
 	matrix::Vector<float, 16> actuator_trim;
 	matrix::Vector<float, 16> linearization_point;
@@ -150,4 +151,25 @@ TEST(ControlAllocationTest, ThrustVectorNormalizationUsesAvailableAxis)
 	EXPECT_NEAR(method.getControlAllocationScale()(3), 2.f, 1e-6f);
 	EXPECT_FLOAT_EQ(method.getControlAllocationScale()(3), method.getControlAllocationScale()(4));
 	EXPECT_FLOAT_EQ(method.getControlAllocationScale()(3), method.getControlAllocationScale()(5));
+}
+
+TEST(ControlAllocationTest, ConventionalAirframeKeepsPerAxisThrustNormalization)
+{
+	ControlAllocationPseudoInverse method;
+	matrix::Matrix<float, 6, 16> effectiveness;
+	matrix::Vector<float, 16> actuator_trim;
+	matrix::Vector<float, 16> linearization_point;
+	matrix::Vector<float, 6> control_sp;
+
+	effectiveness(3, 3) = 0.5f;
+	effectiveness(4, 4) = 0.25f;
+	effectiveness(5, 5) = 1.f;
+
+	method.setEffectivenessMatrix(effectiveness, actuator_trim, linearization_point, 6, true);
+	method.setControlSetpoint(control_sp);
+	method.allocate();
+
+	EXPECT_NEAR(method.getControlAllocationScale()(3), 2.f, 1e-6f);
+	EXPECT_NEAR(method.getControlAllocationScale()(4), 4.f, 1e-6f);
+	EXPECT_NEAR(method.getControlAllocationScale()(5), 1.f, 1e-6f);
 }

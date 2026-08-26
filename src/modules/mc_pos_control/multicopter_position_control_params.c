@@ -51,24 +51,28 @@ PARAM_DEFINE_FLOAT(MPC_THR_HOVER, 0.5f);
 /**
  * Fully actuated position-control flight mode
  *
- * Selects one of two fully actuated Position-mode behaviors. Both send all
+ * Selects one of two fully actuated position-controller behaviors. Both send all
  * three body-frame thrust components independently from the attitude setpoint
  * and require a control-effectiveness matrix with controllable Fx, Fy, Fz,
  * roll, pitch and yaw axes.
  *
- * Mode 0 holds the roll/pitch captured on mode entry and retains the normal yaw
- * setpoint; position changes use independent three-axis thrust.
+ * Mode 0 commands zero roll/pitch and retains the normal yaw setpoint;
+ * position changes use independent three-axis thrust. Manual Altitude
+ * mode always uses this behavior: horizontal sticks command direct Fx/Fy while
+ * roll/pitch remain zero.
  * Mode 1 is for manual Position flight after takeoff: it holds the captured XYZ
  * position and maps roll, pitch and yaw sticks to attitude commands. Throttle
- * is ignored while the XYZ position is locked.
+ * is ignored while the XYZ position is locked. It is not used in Altitude mode.
  *
- * The parameter is ignored for VTOL position control. Invalid or stale attitude
- * data causes an automatic fallback to the standard tilt-based mapping.
+ * Only SYS_AUTOSTART 6003, 4026, and 22000 consume this parameter. All other airframes
+ * always use the standard tilt-based mapping. It is also ignored for VTOL
+ * position control. Invalid or stale attitude data causes an automatic fallback.
  *
  * When MPC_FA_RC_AUX is set to a non-zero AUX channel, that RC switch overrides
- * this parameter.
+ * this parameter in Position mode. Altitude mode remains in mode 0 regardless
+ * of this parameter or its AUX override.
  *
- * @value 0 Independent thrust, hold entry roll/pitch and controlled yaw
+ * @value 0 Independent thrust, zero roll/pitch and controlled yaw
  * @value 1 Hold XYZ position and control attitude with manual sticks
  * @min 0
  * @max 1
@@ -83,7 +87,7 @@ PARAM_DEFINE_INT32(MPC_FA_MODE, 0);
  * Map the physical RC switch with RC_MAP_AUXn first.
  *
  * Two-position switch mapping (normalized AUX in [-1, 1]):
- *   AUX < -0.2           -> mode 0 (independent thrust, hold entry attitude)
+ *   AUX < -0.2           -> mode 0 (independent thrust, zero roll/pitch)
  *   AUX >  0.2           -> mode 1 (hold XYZ and control attitude)
  * Values between the bands keep the previous mode (hysteresis).
  * If the AUX input is invalid or stale, MPC_FA_MODE is used.

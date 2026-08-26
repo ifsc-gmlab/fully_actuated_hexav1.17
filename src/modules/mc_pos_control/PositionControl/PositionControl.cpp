@@ -187,6 +187,21 @@ void PositionControl::_velocityControl(const float dt)
 		_thr_sp.xy() = thrust_sp_xy / thrust_sp_xy_norm * thrust_max_xy;
 	}
 
+	// A level fully actuated vehicle cannot realize arbitrary horizontal and
+	// vertical force combinations while simultaneously producing attitude
+	// torque. Keep the direct force request inside the configured feasible cone
+	// before tracking anti-windup evaluates the acceleration actually produced.
+	if (_direct_thrust_control && _direct_thrust_limits_enabled) {
+		const Vector2f direct_thrust_sp_xy(_thr_sp);
+		const float direct_thrust_sp_xy_norm = direct_thrust_sp_xy.norm();
+		const float direct_thrust_max_xy = math::min(_lim_thr_xy_direct,
+						   _lim_thr_xy_to_z_ratio * fabsf(_thr_sp(2)));
+
+		if ((direct_thrust_sp_xy_norm > direct_thrust_max_xy) && (direct_thrust_sp_xy_norm > FLT_EPSILON)) {
+			_thr_sp.xy() = direct_thrust_sp_xy * (direct_thrust_max_xy / direct_thrust_sp_xy_norm);
+		}
+	}
+
 	// Use tracking Anti-Windup for horizontal direction: during saturation, the integrator is used to unsaturate the output
 	// see Anti-Reset Windup for PID controllers, L.Rundqwist, 1990
 	const Vector2f acc_sp_xy_produced = Vector2f(_thr_sp) * (CONSTANTS_ONE_G / _hover_thrust);

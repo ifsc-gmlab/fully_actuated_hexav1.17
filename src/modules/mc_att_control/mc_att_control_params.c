@@ -162,26 +162,66 @@ PARAM_DEFINE_FLOAT(MC_MAN_TILT_TAU, 0.0f);
 /**
  * Fully actuated Stabilized mode
  *
- * When enabled in Stabilized (manual attitude) mode, desired roll and pitch are
- * locked to zero while the roll/pitch sticks command horizontal thrust in the
- * yaw setpoint frame (forward/right), transformed into body Fx/Fy/Fz using the
- * current attitude. Yaw stick keeps the normal Stabilized mapping.
+ * 0: Off — standard Stabilized tilt mapping.
+ * 1: Air — lock roll/pitch to zero; roll/pitch sticks command horizontal
+ *    thrust in the yaw-setpoint frame (forward/right). Throttle sets Fz;
+ *    |Fxy| is also capped by MPC_FA_XY_RATIO * |Fz|.
+ * 2: Ground taxi — follow the ground-constrained roll/pitch attitude;
+ *    roll/pitch sticks command body Fx/Fy. The controller adds the minimum
+ *    upward force needed to keep the request inside the unilateral-rotor
+ *    feasible cone. Throttle is ignored.
  *
+ * Yaw stick keeps the normal Stabilized mapping in all cases.
  * Requires a control-effectiveness matrix with controllable Fx and Fy.
- * Ignored for VTOL attitude control.
+ * Only SYS_AUTOSTART 6003, 4026, and 22000 consume this parameter; all other airframes
+ * always use the standard Stabilized tilt mapping. Ignored for VTOL attitude control.
+ * Ignored when MPC_FA_STAB_AUX selects an AUX input.
  *
- * @boolean
+ * @value 0 Off
+ * @value 1 Air (level + horizontal force)
+ * @value 2 Ground taxi
+ * @min 0
+ * @max 2
  * @group Multicopter Attitude Control
  */
 PARAM_DEFINE_INT32(MPC_FA_STAB, 0);
 
 /**
- * Max lateral thrust in fully actuated Stabilized mode
+ * RC AUX input selector for MPC_FA_STAB
  *
- * Absolute magnitude limit for the horizontal thrust command from the sticks
- * when MPC_FA_STAB is enabled. The effective limit is also capped by
- * MPC_FA_XY_RATIO * |Fz| so large side force is not requested at low throttle
- * (which saturates motors and loses attitude authority).
+ * 0: disabled — use MPC_FA_STAB parameter only.
+ * 1..6 selects the logical AUX1..AUX6 input, not a physical RC channel.
+ * First map the physical switch to AUXn with RC_MAP_AUXn. For example, to use
+ * physical RC channel 8 through AUX1, set RC_MAP_AUX1=8 and this parameter=1.
+ * When enabled, AUX is authoritative and MPC_FA_STAB is ignored.
+ *
+ * Three-position switch mapping follows the MPC_FA_STAB mode numbers:
+ *   AUX in [-1, -0.6] → mode 0 (off)
+ *   AUX in [-0.2, 0.2] → mode 1 (air)
+ *   AUX in [0.6, 1] → mode 2 (ground taxi)
+ * Values in the gaps keep the previous valid AUX mode (hysteresis). An
+ * invalid/unmapped AUX, or a gap before the first valid position, selects off.
+ *
+ * @min 0
+ * @max 6
+ * @value 0 Disabled
+ * @value 1 AUX1
+ * @value 2 AUX2
+ * @value 3 AUX3
+ * @value 4 AUX4
+ * @value 5 AUX5
+ * @value 6 AUX6
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_INT32(MPC_FA_STAB_AUX, 0);
+
+/**
+ * Max lateral thrust for fully actuated level flight
+ *
+ * Absolute magnitude limit for horizontal thrust in fully actuated Stabilized
+ * air mode and in level direct-thrust Position/Altitude mode. The effective
+ * limit is also capped by MPC_FA_XY_RATIO * |Fz|. In ground taxi mode it is
+ * instead coupled to MPC_FA_GND_XY_Z and MPC_FA_GND_ZMAX.
  *
  * @min 0.0
  * @max 1.0
@@ -192,11 +232,45 @@ PARAM_DEFINE_INT32(MPC_FA_STAB, 0);
 PARAM_DEFINE_FLOAT(MPC_FA_XY_THR, 0.15f);
 
 /**
- * Lateral-to-vertical thrust ratio in fully actuated Stabilized mode
+ * Ground taxi horizontal-to-vertical force ratio
  *
- * Caps horizontal thrust to this fraction of the commanded |Fz|. Keep well
- * below the geometric tan(tilt) of the rotors so torque authority remains for
- * holding level attitude.
+ * Maximum |Fxy| / |Fz| used by the ground taxi setpoint generator. This must
+ * not exceed the physical force-cone ratio of the rotor geometry and should
+ * include margin for torque allocation. Although the rotor-axis force cone has
+ * an upper bound near 0.90, the fixed fully actuated hex geometry can guarantee
+ * only about 0.35 in every direction while also commanding zero body torque.
+ *
+ * @min 0.05
+ * @max 0.90
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MPC_FA_GND_XY_Z, 0.30f);
+
+/**
+ * Ground taxi maximum upward force
+ *
+ * Maximum normalized upward force magnitude allowed while generating ground
+ * taxi horizontal force. The controller additionally caps this value at 80%
+ * of MPC_THR_HOVER. Neutral roll/pitch sticks always command zero force.
+ *
+ * @min 0.0
+ * @max 0.5
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MPC_FA_GND_ZMAX, 0.20f);
+
+/**
+ * Lateral-to-vertical thrust ratio for fully actuated level flight
+ *
+ * In Stabilized air mode and level direct-thrust Position/Altitude mode,
+ * horizontal thrust is capped to this fraction of the commanded |Fz|. Keep
+ * below the geometry's zero-torque force-cone boundary so torque authority
+ * remains for holding level attitude.
+ * Ignored in ground taxi mode (MPC_FA_STAB=2), which uses MPC_FA_GND_XY_Z.
  *
  * @min 0.0
  * @max 1.0
@@ -204,4 +278,4 @@ PARAM_DEFINE_FLOAT(MPC_FA_XY_THR, 0.15f);
  * @increment 0.05
  * @group Multicopter Attitude Control
  */
-PARAM_DEFINE_FLOAT(MPC_FA_XY_RATIO, 0.35f);
+PARAM_DEFINE_FLOAT(MPC_FA_XY_RATIO, 0.30f);

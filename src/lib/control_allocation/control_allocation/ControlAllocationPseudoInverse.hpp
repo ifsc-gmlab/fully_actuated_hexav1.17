@@ -77,6 +77,7 @@ protected:
 	 *
 	 */
 	void updatePseudoInverse();
+	virtual void updateThrustScale();
 
 private:
 	void normalizeControlAllocationMatrix();

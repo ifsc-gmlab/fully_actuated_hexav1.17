@@ -130,6 +130,24 @@ public:
 	void setDirectThrustControl(bool enabled) { _direct_thrust_control = enabled; }
 
 	/**
+	 * Limit horizontal thrust while direct three-dimensional thrust control is active.
+	 *
+	 * A fully actuated rotor geometry can only produce a bounded lateral force
+	 * while retaining enough allocation authority for attitude torque. These
+	 * limits describe that feasible force cone for a level attitude command.
+	 *
+	 * @param enabled apply the limits while direct thrust control is active
+	 * @param horizontal maximum normalized horizontal thrust magnitude
+	 * @param horizontal_to_vertical_ratio maximum |Fxy| / |Fz|
+	 */
+	void setDirectThrustLimits(bool enabled, float horizontal, float horizontal_to_vertical_ratio)
+	{
+		_direct_thrust_limits_enabled = enabled;
+		_lim_thr_xy_direct = math::constrain(horizontal, 0.f, 1.f);
+		_lim_thr_xy_to_z_ratio = math::constrain(horizontal_to_vertical_ratio, 0.f, 1.f);
+	}
+
+	/**
 	 * Set the normalized hover thrust
 	 * @param hover_thrust [HOVER_THRUST_MIN, HOVER_THRUST_MAX] with which the vehicle hovers not accelerating down or up with level orientation
 	 */
@@ -225,10 +243,13 @@ private:
 	float _lim_thr_max{}; ///< Maximum collective thrust allowed as output [-1,0] e.g. -0.1
 	float _lim_thr_xy_margin{}; ///< Margin to keep for horizontal control when saturating prioritized vertical thrust
 	float _lim_tilt{}; ///< Maximum tilt from level the output attitude is allowed to have
+	float _lim_thr_xy_direct{}; ///< Absolute horizontal thrust limit for level direct-thrust control
+	float _lim_thr_xy_to_z_ratio{}; ///< Horizontal-to-vertical force ratio for level direct-thrust control
 
 	float _hover_thrust{}; ///< Thrust [HOVER_THRUST_MIN, HOVER_THRUST_MAX] with which the vehicle hovers not accelerating down or up with level orientation
 	bool _decouple_horizontal_and_vertical_acceleration{true}; ///< Ignore vertical acceleration setpoint to remove its effect on the tilt setpoint
 	bool _direct_thrust_control{false}; ///< Do not constrain horizontal force through the multicopter tilt cone
+	bool _direct_thrust_limits_enabled{false}; ///< Apply the fully actuated level-attitude force cone
 
 	// States
 	matrix::Vector3f _pos; /**< current position */

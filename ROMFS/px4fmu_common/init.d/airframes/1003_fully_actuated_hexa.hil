@@ -78,7 +78,7 @@ param set-default MPC_FA_TILT_MAX 10.0
 # Keep XY small vs |Fz| so motors are not saturated and attitude can hold.
 param set-default MPC_FA_STAB 1
 param set-default MPC_FA_XY_THR 0.15
-param set-default MPC_FA_XY_RATIO 0.35
+param set-default MPC_FA_XY_RATIO 0.30
 
 param set-default MC_YAW_TQ_CUTOFF 0.0
 

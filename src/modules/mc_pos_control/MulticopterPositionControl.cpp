@@ -37,7 +37,6 @@
 #include <lib/mathlib/mathlib.h>
 #include <lib/matrix/matrix/math.hpp>
 #include <px4_platform_common/events.h>
-#include "PositionControl/ControlMath.hpp"
 
 using namespace matrix;
 
@@ -45,7 +44,8 @@ MulticopterPositionControl::MulticopterPositionControl(bool vtol) :
 	ModuleParams(nullptr),
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::nav_and_controllers),
 	_vehicle_attitude_setpoint_pub(vtol ? ORB_ID(mc_virtual_attitude_setpoint) : ORB_ID(vehicle_attitude_setpoint)),
-	_vtol(vtol)
+	_vtol(vtol),
+	_fully_actuated_control(this, vtol)
 {
 	_sample_interval_s.update(0.01f); // 100 Hz default
 	parameters_update(true);
@@ -376,156 +376,6 @@ PositionControlStates MulticopterPositionControl::set_vehicle_states(const vehic
 	return states;
 }
 
-bool MulticopterPositionControl::generateFullActuatedAttitudeSetpoint(
-	const vehicle_local_position_setpoint_s &local_pos_sp, const float dt,
-	vehicle_attitude_setpoint_s &attitude_setpoint)
-{
-	// The body-frame command must follow the measured attitude. Do not keep
-	// using an old transform if the estimator stops publishing attitude.
-	if ((_vehicle_attitude.timestamp == 0) || (hrt_elapsed_time(&_vehicle_attitude.timestamp) > 100_ms)) {
-		_full_actuated_attitude_hold_valid = false;
-		return false;
-	}
-
-	matrix::Quatf q_current{_vehicle_attitude.q};
-
-	if (!q_current.isAllFinite() || q_current.norm_squared() < FLT_EPSILON) {
-		_full_actuated_attitude_hold_valid = false;
-		return false;
-	}
-
-	q_current.normalize();
-	matrix::Quatf q_desired{};
-
-	if (_full_actuated_mode == 0) {
-		if (!PX4_ISFINITE(local_pos_sp.yaw)) {
-			return false;
-		}
-
-		// Keep the roll and pitch that the vehicle had when mode 0 became active.
-		// Position changes are produced exclusively by the independent
-		// three-axis thrust command, while yaw remains independently controllable.
-		if (!_full_actuated_attitude_hold_valid) {
-			_full_actuated_attitude_hold = q_current;
-			_full_actuated_attitude_hold_valid = true;
-		}
-
-		const matrix::Eulerf held_attitude{_full_actuated_attitude_hold};
-		q_desired = matrix::Quatf{matrix::Eulerf{held_attitude.phi(), held_attitude.theta(), local_pos_sp.yaw}};
-
-	} else if (_full_actuated_mode == 1) {
-		if (!_manual_control_setpoint.valid || (_manual_control_setpoint.timestamp == 0)
-		    || (hrt_elapsed_time(&_manual_control_setpoint.timestamp) > 500_ms)
-		    || !PX4_ISFINITE(_manual_control_setpoint.roll)
-		    || !PX4_ISFINITE(_manual_control_setpoint.pitch)
-		    || !PX4_ISFINITE(local_pos_sp.yaw)) {
-			return false;
-		}
-
-		const float roll_input = math::expo_deadzone(_manual_control_setpoint.roll,
-					 _param_mpc_xy_man_expo.get(), _param_mpc_hold_dz.get());
-		const float pitch_input = math::expo_deadzone(_manual_control_setpoint.pitch,
-					  _param_mpc_xy_man_expo.get(), _param_mpc_hold_dz.get());
-		matrix::Vector2f tilt_target{roll_input, -pitch_input};
-
-		if (tilt_target.norm() > 1.f) {
-			tilt_target.normalize();
-		}
-
-		const float maximum_tilt = math::radians(math::constrain(_param_mpc_fa_tilt_max.get(), 1.f, 45.f));
-		tilt_target *= maximum_tilt;
-
-		if (!_full_actuated_tilt_filter_initialized) {
-			const matrix::Eulerf current_euler{q_current};
-			matrix::Vector2f current_tilt{current_euler.phi(), current_euler.theta()};
-
-			if (current_tilt.norm() > maximum_tilt) {
-				current_tilt = current_tilt.normalized() * maximum_tilt;
-			}
-
-			_full_actuated_tilt_filter.reset(current_tilt);
-			_full_actuated_tilt_filter_initialized = true;
-		}
-
-		_full_actuated_tilt_filter.setParameters(dt, math::max(_param_mc_man_tilt_tau.get(), 0.f));
-		const matrix::Vector2f tilt_setpoint = _full_actuated_tilt_filter.update(tilt_target);
-		const matrix::Quatf q_roll_pitch{matrix::AxisAnglef{tilt_setpoint(0), tilt_setpoint(1), 0.f}};
-		const matrix::Quatf q_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f, sinf(local_pos_sp.yaw * 0.5f)};
-		q_desired = q_yaw * q_roll_pitch;
-
-	} else {
-		return false;
-	}
-
-	if (!ControlMath::thrustNedToBody(matrix::Vector3f{local_pos_sp.thrust}, q_current, q_desired,
-			attitude_setpoint)) {
-		return false;
-	}
-
-	attitude_setpoint.yaw_sp_move_rate = PX4_ISFINITE(local_pos_sp.yawspeed) ? local_pos_sp.yawspeed : 0.f;
-	return true;
-}
-
-int32_t MulticopterPositionControl::resolveFullActuatedMode(int32_t previous_mode) const
-{
-	const int32_t param_mode = math::constrain(_param_mpc_fa_mode.get(), (int32_t)0, (int32_t)1);
-	const int32_t aux_channel = _param_mpc_fa_rc_aux.get();
-
-	if ((aux_channel < 1) || (aux_channel > 6)) {
-		return param_mode;
-	}
-
-	if (!_manual_control_setpoint.valid || (_manual_control_setpoint.timestamp == 0)
-	    || (hrt_elapsed_time(&_manual_control_setpoint.timestamp) > 500_ms)) {
-		return param_mode;
-	}
-
-	float aux = NAN;
-
-	switch (aux_channel) {
-	case 1:
-		aux = _manual_control_setpoint.aux1;
-		break;
-
-	case 2:
-		aux = _manual_control_setpoint.aux2;
-		break;
-
-	case 3:
-		aux = _manual_control_setpoint.aux3;
-		break;
-
-	case 4:
-		aux = _manual_control_setpoint.aux4;
-		break;
-
-	case 5:
-		aux = _manual_control_setpoint.aux5;
-		break;
-
-	case 6:
-		aux = _manual_control_setpoint.aux6;
-		break;
-
-	default:
-		return param_mode;
-	}
-
-	if (!PX4_ISFINITE(aux)) {
-		return param_mode;
-	}
-
-	// Two-position switch bands with hysteresis around center.
-	if (aux < -0.2f) {
-		return 0;
-
-	} else if (aux > 0.2f) {
-		return 1;
-	}
-
-	return math::constrain(previous_mode, (int32_t)0, (int32_t)1);
-}
-
 void MulticopterPositionControl::Run()
 {
 	if (should_exit()) {
@@ -552,32 +402,8 @@ void MulticopterPositionControl::Run()
 
 		_sample_interval_s.update(dt);
 
-		// 获取姿态
-		vehicle_attitude_s vehicle_attitude{};
-
-		if (_vehicle_attitude_sub.update(&vehicle_attitude)) {
-			// Reinitialize attitude-dependent states across estimator frame resets.
-			if ((_vehicle_attitude.timestamp != 0)
-			    && (vehicle_attitude.quat_reset_counter != _vehicle_attitude.quat_reset_counter)) {
-				_full_actuated_attitude_hold_valid = false;
-				_full_actuated_tilt_filter_initialized = false;
-			}
-
-			_vehicle_attitude = vehicle_attitude;
-		}
-
-		_manual_control_setpoint_sub.update(&_manual_control_setpoint);
-
-		// 获取全驱动模式（可由 RC AUX 两段开关覆盖 MPC_FA_MODE）
-		const int32_t requested_full_actuated_mode = resolveFullActuatedMode(_full_actuated_mode);
-
-		// 如果全驱动模式发生变化，则重置全驱动模式状态
-		if (requested_full_actuated_mode != _full_actuated_mode) {
-			_full_actuated_mode = requested_full_actuated_mode;
-			_full_actuated_attitude_hold_valid = false;
-			_full_actuated_position_hold_valid = false;
-			_full_actuated_tilt_filter_initialized = false;
-		}
+		// 读取是否为全是量的机架，并启动对应的控制逻辑
+		_fully_actuated_control.updateSubscriptions();
 
 		if (_vehicle_control_mode_sub.updated()) {
 			const bool previous_position_control_enabled = _vehicle_control_mode.flag_multicopter_position_control_enabled;
@@ -585,19 +411,18 @@ void MulticopterPositionControl::Run()
 			if (_vehicle_control_mode_sub.update(&_vehicle_control_mode)) {
 				if (!previous_position_control_enabled && _vehicle_control_mode.flag_multicopter_position_control_enabled) {
 					_time_position_control_enabled = _vehicle_control_mode.timestamp;
-					_full_actuated_attitude_hold_valid = false;
-					_full_actuated_position_hold_valid = false;
-					_full_actuated_tilt_filter_initialized = false;
+					_fully_actuated_control.reset();
 
 				} else if (previous_position_control_enabled && !_vehicle_control_mode.flag_multicopter_position_control_enabled) {
 					// clear existing setpoint when controller is no longer active
 					_setpoint = PositionControl::empty_trajectory_setpoint;
-					_full_actuated_attitude_hold_valid = false;
-					_full_actuated_position_hold_valid = false;
-					_full_actuated_tilt_filter_initialized = false;
+					_fully_actuated_control.reset();
 				}
 			}
 		}
+
+		//全矢量模式选择
+		_fully_actuated_control.updateControlMode(_vehicle_control_mode);
 
 		_vehicle_land_detected_sub.update(&_vehicle_land_detected);
 
@@ -706,46 +531,11 @@ void MulticopterPositionControl::Run()
 				_control.resetIntegral();
 			}
 
-			// Manual pose mode dedicates the sticks to attitude control and keeps
-			// the complete NED position captured after takeoff. Before takeoff the
-			// normal Position task remains active so throttle can initiate flight.
-			const bool manual_pose_mode_active = !_vtol && (_full_actuated_mode == 1)
-							     && _vehicle_control_mode.flag_control_manual_enabled
-							     && flying && !flying_but_ground_contact;
-
-			if (manual_pose_mode_active && states.position.isAllFinite()) {
-				if (!_full_actuated_position_hold_valid) {
-					_full_actuated_position_hold = states.position;
-					_full_actuated_position_hold_valid = true;
-				}
-
-				_full_actuated_position_hold.copyTo(_setpoint.position);
-				matrix::Vector3f{}.copyTo(_setpoint.velocity);
-				matrix::Vector3f acceleration_setpoint{};
-				acceleration_setpoint.setNaN();
-				acceleration_setpoint.copyTo(_setpoint.acceleration);
-
-			} else {
-				_full_actuated_position_hold_valid = false;
-				_full_actuated_tilt_filter_initialized = false;
-			}
-
-			const bool full_actuated_requested = !_vtol
-							     && (_full_actuated_mode == 0
-									     || (manual_pose_mode_active && _full_actuated_position_hold_valid));
-			const matrix::Quatf current_attitude{_vehicle_attitude.q};
-			const bool current_attitude_valid = (_vehicle_attitude.timestamp != 0)
-							    && (hrt_elapsed_time(&_vehicle_attitude.timestamp) <= 100_ms)
-							    && current_attitude.isAllFinite()
-							    && (current_attitude.norm_squared() > FLT_EPSILON);
-			const bool manual_attitude_input_valid = (_full_actuated_mode != 1)
-					|| (_manual_control_setpoint.valid
-					    && (_manual_control_setpoint.timestamp != 0)
-					    && (hrt_elapsed_time(&_manual_control_setpoint.timestamp) <= 500_ms)
-					    && PX4_ISFINITE(_manual_control_setpoint.roll)
-					    && PX4_ISFINITE(_manual_control_setpoint.pitch));
-			_control.setDirectThrustControl(full_actuated_requested && current_attitude_valid
-							     && manual_attitude_input_valid);
+			const FullyActuatedControl::DirectThrustConfiguration direct_thrust =
+				_fully_actuated_control.updateSetpoint(states.position, flying, flying_but_ground_contact, _setpoint);
+			_control.setDirectThrustControl(direct_thrust.enabled);
+			_control.setDirectThrustLimits(direct_thrust.limits_enabled, direct_thrust.horizontal_limit,
+						       direct_thrust.horizontal_to_vertical_ratio);
 
 			// limit tilt during takeoff ramupup
 			const float tilt_limit_deg = (_takeoff.getTakeoffState() < TakeoffState::flight)
@@ -836,17 +626,10 @@ void MulticopterPositionControl::Run()
 			// Publish attitude setpoint output
 			vehicle_attitude_setpoint_s attitude_setpoint{};
 
-			if (!full_actuated_requested
-			    || !generateFullActuatedAttitudeSetpoint(local_pos_sp, dt, attitude_setpoint)) {
+			if (!_fully_actuated_control.generateAttitudeSetpoint(local_pos_sp, dt, attitude_setpoint)) {
 				// Preserve the standard PX4 behavior for normal vehicles and as a
 				// safety fallback if the independent mapping cannot be generated.
 				_control.getAttitudeSetpoint(attitude_setpoint);
-
-				if (full_actuated_requested
-				    && (hrt_elapsed_time(&_last_full_actuated_warn) > 2_s)) {
-					PX4_WARN("full-actuated output invalid, using standard mapping");
-					_last_full_actuated_warn = hrt_absolute_time();
-				}
 			}
 
 			attitude_setpoint.timestamp = hrt_absolute_time();
@@ -928,18 +711,7 @@ trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const
 void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
 		trajectory_setpoint_s &setpoint)
 {
-	// The mode-3 position hold lives outside the FlightTask setpoint, so it
-	// needs the same local-frame reset correction as regular position setpoints.
-	if (_full_actuated_position_hold_valid) {
-		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
-			_full_actuated_position_hold(0) += vehicle_local_position.delta_xy[0];
-			_full_actuated_position_hold(1) += vehicle_local_position.delta_xy[1];
-		}
-
-		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
-			_full_actuated_position_hold(2) += vehicle_local_position.delta_z;
-		}
-	}
+	_fully_actuated_control.adjustPositionHoldForEKFReset(vehicle_local_position, _xy_reset_counter, _z_reset_counter);
 
 	if ((setpoint.timestamp != 0) && (setpoint.timestamp < vehicle_local_position.timestamp)) {
 		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {

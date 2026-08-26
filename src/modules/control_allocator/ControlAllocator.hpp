@@ -41,6 +41,8 @@
 
 #pragma once
 
+#include "FullyActuatedControlAllocation.hpp"
+
 #include <ActuatorEffectiveness.hpp>
 #include <ActuatorEffectivenessMultirotor.hpp>
 #include <ActuatorEffectivenessStandardVTOL.hpp>
@@ -129,7 +131,7 @@ private:
 	void parameters_updated(); // 参数更新
 
 	void update_allocation_method(bool force); // 更新分配方法
-	bool update_effectiveness_source(); // 更新有效性源
+	bool update_effectiveness_source(bool force = false); // 更新有效性源
 
 	void update_effectiveness_matrix_if_needed(EffectivenessUpdateReason reason); // 如果需要，更新有效性矩阵
 
@@ -204,6 +206,7 @@ private:
 	uint16_t _handled_motor_failure_bitmask{0};
 	uint16_t _motor_stop_mask{0};
 
+	FullyActuatedControlAllocation _fully_actuated_control_allocation;
 	perf_counter_t	_loop_perf;			/**< loop duration performance counter */
 
 	bool _armed{false};

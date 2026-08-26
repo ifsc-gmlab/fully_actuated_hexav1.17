@@ -52,6 +52,7 @@ using namespace time_literals;
 ControlAllocator::ControlAllocator() :
 	ModuleParams(nullptr),
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::rate_ctrl),
+	_fully_actuated_control_allocation(this),
 	_loop_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle"))
 {
 	_control_allocator_status_pub[0].advertise();
@@ -105,6 +106,8 @@ ControlAllocator::init()
 void
 ControlAllocator::parameters_updated()
 {
+	const bool airframe_eligibility_changed = _fully_actuated_control_allocation.updateAirframe();
+
 	_has_slew_rate = false;
 
 	for (int i = 0; i < MAX_NUM_MOTORS; ++i) {
@@ -119,7 +122,7 @@ ControlAllocator::parameters_updated()
 
 	// Allocation method & effectiveness source
 	// Do this first: in case a new method is loaded, it will be configured below
-	bool updated = update_effectiveness_source();
+	bool updated = update_effectiveness_source(airframe_eligibility_changed);
 	update_allocation_method(updated); // must be called after update_effectiveness_source()
 
 	if (_num_control_allocation == 0) {
@@ -175,7 +178,7 @@ ControlAllocator::update_allocation_method(bool force)
 
 			switch (method) {
 			case AllocationMethod::PSEUDO_INVERSE:
-				_control_allocation[i] = new ControlAllocationPseudoInverse();
+				_control_allocation[i] = _fully_actuated_control_allocation.createPseudoInverse();
 				break;
 
 			case AllocationMethod::SEQUENTIAL_DESATURATION:
@@ -202,11 +205,11 @@ ControlAllocator::update_allocation_method(bool force)
 }
 
 bool
-ControlAllocator::update_effectiveness_source()
+ControlAllocator::update_effectiveness_source(bool force)
 {
 	const EffectivenessSource source = (EffectivenessSource)_param_ca_airframe.get();
 
-	if (_effectiveness_source_id != source) {
+	if ((_effectiveness_source_id != source) || force) {
 
 		// try to instanciate new effectiveness source
 		ActuatorEffectiveness *tmp = nullptr;
@@ -274,8 +277,7 @@ ControlAllocator::update_effectiveness_source()
 			break;
 
 		case EffectivenessSource::FULLY_ACTUATED_HEXA:
-			tmp = new ActuatorEffectivenessMultirotor(this,
-					ActuatorEffectivenessRotors::AxisConfiguration::FixedFullyActuatedHexa);
+			tmp = _fully_actuated_control_allocation.createEffectivenessSource(this);
 			break;
 
 		default:

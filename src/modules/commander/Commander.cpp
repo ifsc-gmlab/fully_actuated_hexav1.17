@@ -2281,8 +2281,16 @@ void Commander::handleAutoDisarm()
 	// Auto disarm when landed or kill switch engaged
 	if (isArmed()) {
 
-		// Check for auto-disarm on landing or pre-flight
-		if (_param_com_disarm_land.get() > 0 || _param_com_disarm_prflt.get() > 0) {
+		fully_actuated_control_status_s fa_status{};
+		const bool fa_ground_taxi = _fully_actuated_control_status_sub.copy(&fa_status)
+					    && fa_status.ground_taxi_active
+					    && (hrt_elapsed_time(&fa_status.timestamp) < 500_ms)
+					    && _vehicle_land_detected.landed;
+
+		if (fa_ground_taxi) {
+			_auto_disarm_landed.set_state_and_update(false, hrt_absolute_time());
+
+		} else if (_param_com_disarm_land.get() > 0 || _param_com_disarm_prflt.get() > 0) {
 
 			const bool auto_disarm_land_enabled = _param_com_disarm_land.get() > 0 && !_mission_in_progress
 							      && !_config_overrides.disable_auto_disarm;

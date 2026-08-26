@@ -56,6 +56,7 @@ using namespace matrix;
 MulticopterAttitudeControl::MulticopterAttitudeControl(bool vtol) :
 	ModuleParams(nullptr),
 	WorkItem(MODULE_NAME, px4::wq_configurations::nav_and_controllers),
+	_fully_actuated_attitude_control(this),
 	_vehicle_attitude_setpoint_pub(vtol ? ORB_ID(mc_virtual_attitude_setpoint) : ORB_ID(vehicle_attitude_setpoint)),
 	_loop_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")),
 	_vtol(vtol)
@@ -153,61 +154,30 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt)
 	// Make sure there's a valid attitude quaternion with no yaw error when yaw is unlocked (NAN)
 	const float yaw_setpoint = PX4_ISFINITE(_yaw_setpoint_stabilized) ? _yaw_setpoint_stabilized : yaw;
 
-	_man_roll_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
-	_man_pitch_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
+	bool fully_actuated_setpoint_generated = false;
 
-	if (_param_mpc_fa_stab.get() && !_vtol) {
-		/*
-		 * Fully actuated Stabilized mode
-		 * ------------------------------
-		 * Keep the vehicle level (roll = pitch = 0). Map sticks to a horizontal
-		 * force in the yaw-setpoint frame, then rotate into body thrust with the
-		 * *current* attitude so a small tilt does not turn body-Fx into an
-		 * amplifying world-vertical component. Cap |Fxy| by both MPC_FA_XY_THR
-		 * and MPC_FA_XY_RATIO*|Fz| to leave torque headroom for attitude hold.
-		 */
-		const float thrust_z = -throttle_curve(_manual_control_setpoint.throttle);
-		const float xy_thr_abs = math::constrain(_param_mpc_fa_xy_thr.get(), 0.f, 1.f);
-		const float xy_thr_ratio = math::constrain(_param_mpc_fa_xy_ratio.get(), 0.f, 1.f);
-		const float xy_thr_max = math::min(xy_thr_abs, xy_thr_ratio * fabsf(thrust_z));
+	if (_fully_actuated_attitude_control.active()) {
+		const FullyActuatedAttitudeControl::SetpointInput input{
+			q,
+			_manual_control_setpoint.roll,
+			_manual_control_setpoint.pitch,
+			yaw_setpoint,
+			attitude_setpoint.yaw_sp_move_rate,
+			-throttle_curve(_manual_control_setpoint.throttle),
+			_param_mpc_thr_hover.get(),
+			_manual_throttle_maximum.getState(),
+			_param_man_deadzone.get(),
+			_param_mc_man_tilt_tau.get(),
+			dt
+		};
+		fully_actuated_setpoint_generated =
+			_fully_actuated_attitude_control.generateAttitudeSetpoint(input, attitude_setpoint);
+	}
 
-		Vector2f thrust_xy_sp(_man_pitch_input_filter.update(_manual_control_setpoint.pitch * xy_thr_max),
-				      _man_roll_input_filter.update(_manual_control_setpoint.roll * xy_thr_max));
-		const float thrust_xy_norm = thrust_xy_sp.norm();
+	if (!fully_actuated_setpoint_generated) {
+		_man_roll_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
+		_man_pitch_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 
-		if ((xy_thr_max > FLT_EPSILON) && (thrust_xy_norm > xy_thr_max)) {
-			thrust_xy_sp *= xy_thr_max / thrust_xy_norm;
-		}
-
-		// Heading-frame FRD force: x forward, y right, z down.
-		const Vector3f thrust_heading{thrust_xy_sp(0), thrust_xy_sp(1), thrust_z};
-		const Quatf q_yaw{Eulerf{0.f, 0.f, yaw_setpoint}};
-		const Vector3f thrust_ned = q_yaw.rotateVector(thrust_heading);
-
-		Quatf q_current{q};
-
-		if (!q_current.isAllFinite() || (q_current.norm_squared() < FLT_EPSILON)) {
-			q_current = q_yaw;
-
-		} else {
-			q_current.normalize();
-		}
-
-		const Vector3f thrust_body = q_current.rotateVectorInverse(thrust_ned);
-
-		const Quatf q_sp{Eulerf{0.f, 0.f, yaw_setpoint}};
-		q_sp.copyTo(attitude_setpoint.q_d);
-
-		if (thrust_body.isAllFinite()) {
-			thrust_body.copyTo(attitude_setpoint.thrust_body);
-
-		} else {
-			attitude_setpoint.thrust_body[0] = 0.f;
-			attitude_setpoint.thrust_body[1] = 0.f;
-			attitude_setpoint.thrust_body[2] = thrust_z;
-		}
-
-	} else {
 		/*
 		 * Input mapping for roll & pitch setpoints
 		 * ----------------------------------------
@@ -343,13 +313,22 @@ MulticopterAttitudeControl::Run()
 
 		const bool run_att_ctrl = _vehicle_control_mode.flag_control_attitude_enabled
 					  && (is_hovering || is_tailsitter_transition);
+		const bool stabilized_manual_control = run_att_ctrl
+						       && _vehicle_control_mode.flag_control_manual_enabled
+						       && !_vehicle_control_mode.flag_control_altitude_enabled
+						       && !_vehicle_control_mode.flag_control_velocity_enabled
+						       && !_vehicle_control_mode.flag_control_position_enabled;
+
+		if (_fully_actuated_attitude_control.updateMode(_manual_control_setpoint,
+				stabilized_manual_control, _landed, _vtol)) {
+			// Start the conventional mapping from zero after every FA transition.
+			_man_roll_input_filter.reset(0.f);
+			_man_pitch_input_filter.reset(0.f);
+		}
 
 		if (run_att_ctrl) {
 			// Generate the attitude setpoint from stick inputs if we are in Manual/Stabilized mode
-			if (_vehicle_control_mode.flag_control_manual_enabled &&
-			    !_vehicle_control_mode.flag_control_altitude_enabled &&
-			    !_vehicle_control_mode.flag_control_velocity_enabled &&
-			    !_vehicle_control_mode.flag_control_position_enabled) {
+			if (stabilized_manual_control) {
 
 				generate_attitude_setpoint(q, dt);
 
@@ -476,6 +455,19 @@ int MulticopterAttitudeControl::task_spawn(int argc, char *argv[])
 	_task_id = -1;
 
 	return PX4_ERROR;
+}
+
+int MulticopterAttitudeControl::print_status()
+{
+	PX4_INFO("Running");
+	_fully_actuated_attitude_control.printStatus();
+	PX4_INFO("landed: %s, thrust_body: [%.3f, %.3f, %.3f]",
+		 _landed ? "yes" : "no",
+		 (double)_thrust_setpoint_body(0),
+		 (double)_thrust_setpoint_body(1),
+		 (double)_thrust_setpoint_body(2));
+
+	return 0;
 }
 
 int MulticopterAttitudeControl::custom_command(int argc, char *argv[])

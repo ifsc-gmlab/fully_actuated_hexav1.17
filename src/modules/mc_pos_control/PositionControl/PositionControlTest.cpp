@@ -181,6 +181,29 @@ TEST_F(PositionControlBasicTest, DirectThrustMapsAxesDirectly)
 	EXPECT_NEAR(thrust(2), 1.f * 0.5f / CONSTANTS_ONE_G - 0.5f, 1e-5f);
 }
 
+TEST_F(PositionControlBasicTest, DirectThrustRespectsLevelForceCone)
+{
+	_position_control.setDirectThrustControl(true);
+	_position_control.setDirectThrustLimits(true, 0.1f, 0.8f);
+	Vector3f(5.f, 5.f, 0.f).copyTo(_input_setpoint.acceleration);
+
+	ASSERT_TRUE(runController());
+	Vector3f thrust(_output_setpoint.thrust);
+	EXPECT_NEAR(Vector2f(thrust).norm(), 0.1f, 1e-5f);
+	EXPECT_NEAR(thrust(0), thrust(1), 1e-5f);
+	EXPECT_FLOAT_EQ(thrust(2), -0.5f);
+
+	// With a lower vertical command, the coupled force ratio becomes the
+	// tighter limit while preserving the horizontal command direction.
+	_position_control.setDirectThrustLimits(true, 0.5f, 0.3f);
+	Vector3f(5.f, 5.f, 5.f).copyTo(_input_setpoint.acceleration);
+
+	ASSERT_TRUE(runController());
+	thrust = Vector3f(_output_setpoint.thrust);
+	EXPECT_NEAR(Vector2f(thrust).norm(), 0.3f * fabsf(thrust(2)), 1e-5f);
+	EXPECT_NEAR(thrust(0), thrust(1), 1e-5f);
+}
+
 TEST_F(PositionControlBasicTest, VelocityLimit)
 {
 	Vector3f(10.f, 10.f, -10.f).copyTo(_input_setpoint.position);

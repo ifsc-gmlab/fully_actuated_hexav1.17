@@ -40,6 +40,8 @@ px4_add_module(
 	MAIN mc_pos_control
 	COMPILE_FLAGS
 	SRCS
+		FullyActuatedControl.cpp
+		FullyActuatedControl.hpp
 		MulticopterPositionControl.cpp
 		MulticopterPositionControl.hpp
 	DEPENDS
