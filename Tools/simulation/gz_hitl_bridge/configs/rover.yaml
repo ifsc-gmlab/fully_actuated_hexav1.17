@@ -1,0 +1,13 @@
+# Differential-drive rover.
+#   ./launch.py configs/rover.yaml
+
+world: rover                  # rover world has flat ground / friction tuned
+
+vehicles:
+  - name: rover_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: r1_rover
+    sdf_model: r1_rover
+    pose: {x: 0, y: 0, z: 0.1}
+    preset: r1_rover

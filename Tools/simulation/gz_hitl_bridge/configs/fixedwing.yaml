@@ -1,0 +1,13 @@
+# Single RC Cessna fixed-wing.
+#   ./launch.py configs/fixedwing.yaml
+
+world: default
+
+vehicles:
+  - name: cessna_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: rc_cessna
+    sdf_model: rc_cessna
+    pose: {x: 0, y: 0, z: 0.3}
+    preset: rc_cessna

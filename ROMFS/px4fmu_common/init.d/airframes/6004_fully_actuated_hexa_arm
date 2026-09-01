@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# @name Fully Actuated Hexarotor + HX-30HM Arm
+#
+# @type Hexarotor x
+# @class Copter
+#
+# @output Motor1 right CW
+# @output Motor2 left CCW
+# @output Motor3 front-left CW
+# @output Motor4 rear-right CCW
+# @output Motor5 front-right CCW
+# @output Motor6 rear-left CW
+#
+# @maintainer Custom
+#
+. ${R}etc/init.d/airframes/6003_fully_actuated_hexa
+
+# Reuse the validated v1.17 fully-actuated flight-control geometry and tuning.
+# Real hardware only. The arm is independent of the flight-control allocation:
+#   RC AUX3/4/5 -> arm_control -> TELEM2 -> BusLinker -> HX-30HM IDs 1/2/3.
+param set SYS_HITL 0
+
+# FS-i6S defaults retained from the verified Pixhawk 6C package. Calibrate the
+# radio first and change these mappings when the receiver channel order differs.
+param set-default RC_MAP_AUX3 5
+param set-default RC_MAP_AUX4 7
+param set-default RC_MAP_AUX5 9
+
+# Select TELEM2 through the v1.17 serial-device framework. On Pixhawk 6C this
+# resolves to /dev/ttyS3; the driver itself configures the bus to 1 Mbps 8N1.
+param set-default ARM_SER_CFG 102
+
+# Release TELEM2 if a saved configuration still assigns another PX4 service to
+# it. USB/TEL1 remain available for QGroundControl and companion communication.
+if param compare MAV_0_CONFIG 102
+then
+	param set MAV_0_CONFIG 0
+fi
+if param compare MAV_1_CONFIG 102
+then
+	param set MAV_1_CONFIG 0
+fi
+if param compare MAV_2_CONFIG 102
+then
+	param set MAV_2_CONFIG 0
+fi
+if param compare GPS_1_CONFIG 102
+then
+	param set GPS_1_CONFIG 0
+fi
+if param compare GPS_2_CONFIG 102
+then
+	param set GPS_2_CONFIG 0
+fi
+if param compare UXRCE_DDS_CFG 102
+then
+	param set UXRCE_DDS_CFG 0
+fi

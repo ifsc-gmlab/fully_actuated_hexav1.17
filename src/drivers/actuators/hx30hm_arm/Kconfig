@@ -1,0 +1,5 @@
+menuconfig DRIVERS_ACTUATORS_HX30HM_ARM
+	bool "HX-30HM serial robotic arm"
+	default n
+	help
+		Enable the three-axis HX-30HM serial bus arm driver.

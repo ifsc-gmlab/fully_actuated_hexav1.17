@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# @name Gazebo Fully Actuated Hexarotor + 3DOF Arm
+#
+# @type Hexarotor x
+# @class Copter
+#
+# @output Motor1 right CW
+# @output Motor2 left CCW
+# @output Motor3 front-left CW
+# @output Motor4 rear-right CCW
+# @output Motor5 front-right CCW
+# @output Motor6 rear-left CW
+# @output Servo1 arm joint 1 (-90 to +90 deg)
+# @output Servo2 arm joint 2 (-120 to +120 deg)
+# @output Servo3 arm joint 3 (0 to +90 deg)
+#
+# @maintainer Custom
+
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=fully_actuated_hexa_arm}
+
+# Select the arm-equipped model before loading the validated fully-actuated
+# hexarotor defaults. When started through the CMake target this variable is
+# already "gz_fully_actuated_hexa_arm" and px4-rc.gzsim strips the gz_ prefix.
+. ${R}etc/init.d-posix/airframes/4026_gz_fully_actuated_hexa
+
+# The arm is deliberately kept out of CA_ROTOR_COUNT and the flight-control
+# effectiveness matrix.  It uses the independent Gazebo servo output group.
+param set-default SIM_GZ_SV_FUNC1 201
+param set-default SIM_GZ_SV_FUNC2 202
+param set-default SIM_GZ_SV_FUNC3 203
+
+param set-default SIM_GZ_SV_MIN1 0
+param set-default SIM_GZ_SV_MAX1 1000
+param set-default SIM_GZ_SV_DIS1 500
+param set-default SIM_GZ_SV_FAIL1 500
+param set-default SIM_GZ_SV_MINA1 -90
+param set-default SIM_GZ_SV_MAXA1 90
+
+param set-default SIM_GZ_SV_MIN2 0
+param set-default SIM_GZ_SV_MAX2 1000
+param set-default SIM_GZ_SV_DIS2 500
+param set-default SIM_GZ_SV_FAIL2 500
+param set-default SIM_GZ_SV_MINA2 -120
+param set-default SIM_GZ_SV_MAXA2 120
+
+param set-default SIM_GZ_SV_MIN3 0
+param set-default SIM_GZ_SV_MAX3 1000
+param set-default SIM_GZ_SV_DIS3 0
+param set-default SIM_GZ_SV_FAIL3 0
+param set-default SIM_GZ_SV_MINA3 0
+param set-default SIM_GZ_SV_MAXA3 90

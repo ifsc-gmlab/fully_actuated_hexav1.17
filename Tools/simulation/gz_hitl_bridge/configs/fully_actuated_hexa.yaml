@@ -1,0 +1,22 @@
+# Fully actuated hexarotor HITL — Gazebo model fully_actuated_hexa.
+#
+# One command:
+#   ./launch.py configs/fully_actuated_hexa.yaml
+#
+# Flight controller (once):
+#   param set SYS_AUTOSTART 1003   # HIL Fully Actuated Hexarotor
+#   param set MAV_0_RATE 10000
+#   param set MAV_SYS_ID 1
+#   param save && reboot
+# Firmware must include pwm_out_sim (CONFIG_MODULES_SIMULATION_PWM_OUT_SIM=y).
+
+world: default
+
+vehicles:
+  - name: hexa_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: fully_actuated_hexa
+    sdf_model: fully_actuated_hexa
+    pose: {x: 0, y: 0, z: 0.3}
+    preset: fully_actuated_hexa

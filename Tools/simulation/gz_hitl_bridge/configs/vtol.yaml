@@ -1,0 +1,13 @@
+# Single Standard VTOL.
+#   ./launch.py configs/vtol.yaml
+
+world: default
+
+vehicles:
+  - name: vtol_0
+    sysid: 1
+    transport: serial:///dev/ttyACM0:921600
+    model: standard_vtol_0
+    sdf_model: standard_vtol
+    pose: {x: 0, y: 0, z: 0.3}
+    preset: standard_vtol
