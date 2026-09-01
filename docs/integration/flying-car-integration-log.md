@@ -113,3 +113,11 @@
 ### 风险与后续
 
 - 仍需在具备 Linux/PX4 构建环境的主机上生成 uORB 头文件、参数元数据并编译验证。
+
+### 配置自审修正
+
+- `module.yaml` 是飞行汽车九个参数的唯一权威定义；已删除重复的 `flying_car_params.c`，避免 PX4 参数元数据生成出现重复参数。
+- `FlyingCarModeManagerTest.cpp` 现在包含 `<uORB/topics/flying_car_status.h>`，并将两个 C++ 枚举逐项直接比较到 `flying_car_status_s` 的消息常量，以捕获消息与类型契约漂移。
+- 命令：`Test-Path uORB/topics/flying_car_status.h`、`rg -n '#include <uORB/topics/flying_car_status\\.h>|flying_car_status_s::(MODE_|REJECTION_)' src/modules/flying_car/FlyingCarModeManagerTest.cpp`。
+- 结果：生成头文件仍不存在，已记录结构化 RED；本机无 WSL 发行版，未声称原生 PX4 编译通过。
+- `.superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-2-report.md` 已从 Git 索引移除但保留本地，并由 `.superpowers/sdd/.gitignore` 忽略。
