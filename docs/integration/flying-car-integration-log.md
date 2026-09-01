@@ -123,3 +123,29 @@
 - `.superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-2-report.md` 已从 Git 索引移除但保留本地，并由 `.superpowers/sdd/.gitignore` 忽略。
 - 提交：`94b4fbf`（`fix: align flying car configuration metadata`）删除重复的 C 参数源，并将枚举测试直接绑定到 `flying_car_status_s` 消息常量。
 - 自审命令：`git diff HEAD --check`、`git status --short`、`git show --check --stat --oneline HEAD`；结果：无空白错误、工作树干净、修正提交仅包含预期的元数据/测试/记录变动。
+
+## 2026-09-01：实现纯飞行汽车安全状态机
+
+### 修改文件
+
+- `src/modules/flying_car/FlyingCarModeManager.hpp`：定义纯状态机输入、结果、微秒/米每秒单位契约和显式 Fault 复位接口；保持 Task 2 的 `FlyingCarRejectionReason`，并通过别名提供计划要求的 `FlyingCarRejection` 名称。
+- `src/modules/flying_car/FlyingCarModeManager.cpp`：实现 Flight、双向过渡、Ground 和锁存 Fault；对构型、解锁、落地、速度、目标控制链、消抖、过渡保持和超时进行确定性判定。
+- `src/modules/flying_car/FlyingCarModeManagerTest.cpp`：在产品实现前增加逐行为 GoogleTest，覆盖全部安全门、双向过渡、输出互斥、超时和 Fault 复位。
+- `src/modules/flying_car/CMakeLists.txt`：按本地 PX4 约定注册纯库和 `px4_add_unit_gtest`，未创建运行时模块。
+- `src/modules/flying_car/Kconfig`：注册飞行汽车安全原语配置项，并注明运行时模块由后续任务提供。
+- `docs/integration/flying-car-integration-log.md`：记录 Task 3 的 TDD 证据、限制和风险。
+
+### 验证
+
+- RED 命令：`D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.cpp -o .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.exe`。
+- RED 结果：失败，`FlyingCarModeManager.hpp: No such file or directory`，证明测试在产品接口不存在时捕获缺失功能。
+- GREEN 命令：`D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.cpp src/modules/flying_car/FlyingCarModeManager.cpp -o .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.exe`，随后运行该可执行文件。
+- GREEN 结果：通过，共 20 项行为检查。
+- 静态检查：检查 GoogleTest 行为用例、`px4_add_library`/`px4_add_unit_gtest` 注册和禁用依赖词；检查 `git diff --check`。
+- 构建限制：本机没有可用的 Linux/WSL PX4 工具链，生成的 uORB 头文件也不存在，因此未运行或声称 PX4 Linux/SITL 构建通过。
+
+### 风险与后续
+
+- 需在 Linux PX4 环境中生成 `uORB/topics/flying_car_status.h`，编译并运行 `FlyingCarModeManagerTest`，同时确认 Kconfig 选中后的库链接。
+- 当前纯状态机只声明输出所有权；控制器重置、车辆类型发布和真实执行器安全值由后续运行模块及门控任务实现。
+- `FC_SW_DELAY` 同时作为请求消抖和过渡安全输出保持时间；后续参数集成若拆分时序，必须保持现有安全下限和测试覆盖。
