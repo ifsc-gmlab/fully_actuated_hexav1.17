@@ -67,6 +67,6 @@ ActuatorEffectiveness *FullyActuatedControlAllocation::createEffectivenessSource
 				ActuatorEffectivenessRotors::AxisConfiguration::FixedFullyActuatedHexa);
 	}
 
-	PX4_WARN("CA_AIRFRAME=16 ignored outside airframes 6003/4026/22000");
+	PX4_WARN("CA_AIRFRAME=16 ignored outside airframes 6003/6004/4026/22000");
 	return new ActuatorEffectivenessMultirotor(parent);
 }

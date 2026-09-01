@@ -40,9 +40,11 @@ namespace px4 {
 constexpr bool isFullyActuatedAirframe(const int32_t sys_autostart)
 {
     // 6003: 真实全驱动六旋翼机架
+    // 6004: 真实全驱动六旋翼 + 三自由度机械臂
     // 4026: Gazebo SITL 仿真全驱动六旋翼机架
     // 22000: Gazebo SITL 全驱动六旋翼 + 三自由度机械臂
-    return (sys_autostart == 6003) || (sys_autostart == 4026) || (sys_autostart == 22000);
+    return (sys_autostart == 6003) || (sys_autostart == 6004) ||
+           (sys_autostart == 4026) || (sys_autostart == 22000);
 }
 }
 ```
@@ -316,6 +318,7 @@ if (fa_ground_taxi) {
 
 ### 1. 机架启动脚本
 - **真机启动脚本**：`ROMFS/px4fmu_common/init.d/airframes/6003_fully_actuated_hexa`
+- **真机 + 机械臂启动脚本**：`ROMFS/px4fmu_common/init.d/airframes/6004_fully_actuated_hexa_arm`
 - **SITL 启动脚本**：`ROMFS/px4fmu_common/init.d-posix/airframes/4026_gz_fully_actuated_hexa`
 
 ```sh

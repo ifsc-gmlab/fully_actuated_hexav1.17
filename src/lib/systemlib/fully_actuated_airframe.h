@@ -47,7 +47,8 @@ namespace px4
  */
 constexpr bool isFullyActuatedAirframe(const int32_t sys_autostart)
 {
-	return (sys_autostart == 6003) || (sys_autostart == 4026) || (sys_autostart == 22000);
+	return (sys_autostart == 6003) || (sys_autostart == 6004) || (sys_autostart == 4026)
+	       || (sys_autostart == 22000);
 }
 
 } // namespace px4

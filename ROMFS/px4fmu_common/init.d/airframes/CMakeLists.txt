@@ -86,6 +86,7 @@ if(CONFIG_MODULES_MC_RATE_CONTROL)
 		6001_hexa_x
 		6002_draco_r
 		6003_fully_actuated_hexa
+		6004_fully_actuated_hexa_arm
 
 
 		# [7000, 7999] Hexarotor +

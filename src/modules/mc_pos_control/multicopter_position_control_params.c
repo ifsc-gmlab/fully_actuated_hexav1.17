@@ -64,7 +64,7 @@ PARAM_DEFINE_FLOAT(MPC_THR_HOVER, 0.5f);
  * position and maps roll, pitch and yaw sticks to attitude commands. Throttle
  * is ignored while the XYZ position is locked. It is not used in Altitude mode.
  *
- * Only SYS_AUTOSTART 6003, 4026, and 22000 consume this parameter. All other airframes
+ * Only SYS_AUTOSTART 6003, 6004, 4026, and 22000 consume this parameter. All other airframes
  * always use the standard tilt-based mapping. It is also ignored for VTOL
  * position control. Invalid or stale attitude data causes an automatic fallback.
  *

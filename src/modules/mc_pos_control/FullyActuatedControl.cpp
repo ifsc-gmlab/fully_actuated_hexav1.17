@@ -183,6 +183,7 @@ bool FullyActuatedControl::generateAttitudeSetpoint(const vehicle_local_position
 	return false;
 }
 
+
 bool FullyActuatedControl::generateAttitudeSetpointInternal(
 	const vehicle_local_position_setpoint_s &local_pos_sp, float dt,
 	vehicle_attitude_setpoint_s &attitude_setpoint)

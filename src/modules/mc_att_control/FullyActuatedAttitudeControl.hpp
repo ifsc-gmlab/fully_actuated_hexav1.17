@@ -42,7 +42,7 @@
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 
 /**
- * Fully actuated manual-attitude modes for airframes 6003, 4026, and 22000.
+ * Fully actuated manual-attitude modes for airframes 6003, 6004, 4026, and 22000.
  *
  * This class owns all MPC_FA_* parameters, mode state and force-setpoint
  * generation used by mc_att_control. The conventional attitude controller only

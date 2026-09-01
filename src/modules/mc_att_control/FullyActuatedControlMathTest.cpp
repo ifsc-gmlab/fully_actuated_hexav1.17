@@ -45,6 +45,7 @@ using matrix::Vector2f;
 TEST(FullyActuatedAirframe, OnlyConfiguredAutostartIdsAreEligible)
 {
 	EXPECT_TRUE(px4::isFullyActuatedAirframe(6003));
+	EXPECT_TRUE(px4::isFullyActuatedAirframe(6004));
 	EXPECT_TRUE(px4::isFullyActuatedAirframe(4026));
 	EXPECT_TRUE(px4::isFullyActuatedAirframe(22000));
 	EXPECT_FALSE(px4::isFullyActuatedAirframe(0));

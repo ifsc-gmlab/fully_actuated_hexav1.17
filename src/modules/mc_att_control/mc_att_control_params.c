@@ -173,7 +173,7 @@ PARAM_DEFINE_FLOAT(MC_MAN_TILT_TAU, 0.0f);
  *
  * Yaw stick keeps the normal Stabilized mapping in all cases.
  * Requires a control-effectiveness matrix with controllable Fx and Fy.
- * Only SYS_AUTOSTART 6003, 4026, and 22000 consume this parameter; all other airframes
+ * Only SYS_AUTOSTART 6003, 6004, 4026, and 22000 consume this parameter; all other airframes
  * always use the standard Stabilized tilt mapping. Ignored for VTOL attitude control.
  * Ignored when MPC_FA_STAB_AUX selects an AUX input.
  *

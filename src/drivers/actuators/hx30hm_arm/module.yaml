@@ -1,0 +1,7 @@
+module_name: HX-30HM Arm
+serial_config:
+    - command: arm_control start -r -d ${SERIAL_DEV}
+      port_config_param:
+        name: ARM_SER_CFG
+        group: HX-30HM Arm
+
