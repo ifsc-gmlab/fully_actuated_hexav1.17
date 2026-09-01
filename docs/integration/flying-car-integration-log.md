@@ -149,3 +149,26 @@
 - 需在 Linux PX4 环境中生成 `uORB/topics/flying_car_status.h`，编译并运行 `FlyingCarModeManagerTest`，同时确认 Kconfig 选中后的库链接。
 - 当前纯状态机只声明输出所有权；控制器重置、车辆类型发布和真实执行器安全值由后续运行模块及门控任务实现。
 - `FC_SW_DELAY` 同时作为请求消抖和过渡安全输出保持时间；后续参数集成若拆分时序，必须保持现有安全下限和测试覆盖。
+
+## 2026-09-01：修正活动过渡的连续安全门
+
+### 修改文件
+
+- `src/modules/flying_car/FlyingCarModeManager.cpp`：活动过渡现在持续检查目标请求、构型、解锁、落地、速度和目标控制链；任一条件失效立即回退到来源稳定形态并清除过渡/消抖计时。
+- `src/modules/flying_car/FlyingCarModeManager.hpp`：增加无分配的内部过渡取消辅助函数。
+- `src/modules/flying_car/FlyingCarModeManagerTest.cpp`：增加双向请求反转、活动过渡期间各安全门失效、恢复后完整重新消抖、精确超时边界和超时/完成竞争用例。
+- `docs/integration/flying-car-integration-log.md`：记录安全审查修正证据。
+
+### 验证
+
+- RED 命令：`D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.cpp src/modules/flying_car/FlyingCarModeManager.cpp -o .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-3-harness.exe`，随后运行该程序。
+- RED 结果：失败，62 项检查中 29 项失败；失败集中在过渡取消、具体拒绝原因和恢复后的完整重新消抖，复现了过时过渡可以继续完成的根因。
+- GREEN 结果：修正后同一严格 C++17 命令通过；增加最终双向重新消抖断言后共 65 项检查。
+- 边界语义：活动过渡先判定严格 `elapsed > timeout`；精确等于超时时不进入 Fault，精确同时达到完成和超时时允许完成，超过超时且完成也已到期时 Timeout/Fault 优先。
+- 静态检查：使用忽略的最小 GoogleTest/uORB 契约桩执行 GoogleTest 源码语法检查，并检查禁用依赖、CMake 注册和 `git diff --check`。
+- 构建限制：本机仍无 Linux/WSL PX4 环境和生成的 uORB 头文件，未运行或声称 PX4 Linux/SITL 构建通过。
+
+### 风险与后续
+
+- 仍需在 Linux PX4 环境运行注册的 GoogleTest 和完整 PX4 回归。
+- 已知的 `uint64_t` 时间回绕属于轻微后续项，本次按审查裁定保持不变。

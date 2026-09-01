@@ -47,6 +47,31 @@ void enterGround(FlyingCarModeManager &manager, uint64_t request_started_us = 0)
 	ASSERT_EQ(result.mode, FlyingCarMode::Ground);
 }
 
+void enterTransitionToFlight(FlyingCarModeManager &manager, uint64_t request_started_us)
+{
+	update(manager, validInput(FlyingCarMode::Flight, request_started_us));
+	const auto result = update(manager, validInput(FlyingCarMode::Flight, request_started_us + kTransitionDelayUs));
+	ASSERT_EQ(result.mode, FlyingCarMode::TransitionToFlight);
+}
+
+void expectFreshGroundRequest(FlyingCarModeManager &manager, uint64_t request_started_us)
+{
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Ground, request_started_us)).mode, FlyingCarMode::Flight);
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Ground, request_started_us + kTransitionDelayUs - 1)).mode,
+		  FlyingCarMode::Flight);
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Ground, request_started_us + kTransitionDelayUs)).mode,
+		  FlyingCarMode::TransitionToGround);
+}
+
+void expectFreshFlightRequest(FlyingCarModeManager &manager, uint64_t request_started_us)
+{
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Flight, request_started_us)).mode, FlyingCarMode::Ground);
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Flight, request_started_us + kTransitionDelayUs - 1)).mode,
+		  FlyingCarMode::Ground);
+	EXPECT_EQ(update(manager, validInput(FlyingCarMode::Flight, request_started_us + kTransitionDelayUs)).mode,
+		  FlyingCarMode::TransitionToFlight);
+}
+
 void enterFault(FlyingCarModeManager &manager)
 {
 	enterTransitionToGround(manager);
@@ -213,6 +238,166 @@ TEST(FlyingCarModeManager, GroundToFlightPassesThroughSafeTransitionDwell)
 	const auto complete = update(manager,
 				     validInput(FlyingCarMode::Flight, 4 * kTransitionDelayUs + 100));
 	EXPECT_EQ(complete.mode, FlyingCarMode::Flight);
+}
+
+TEST(FlyingCarModeManager, ReversedGroundRequestCancelsTransitionToGroundAndRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterTransitionToGround(manager);
+	const auto cancelled = update(manager, validInput(FlyingCarMode::Flight, kTransitionDelayUs + 1));
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::None);
+	EXPECT_FALSE(cancelled.arming_locked);
+	expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, ReversedFlightRequestCancelsTransitionToFlightAndRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterGround(manager);
+	constexpr uint64_t request_started_us{2 * kTransitionDelayUs + 100};
+	enterTransitionToFlight(manager, request_started_us);
+	const auto cancelled = update(manager,
+				      validInput(FlyingCarMode::Ground, request_started_us + kTransitionDelayUs + 1));
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Ground);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::None);
+	EXPECT_FALSE(cancelled.arming_locked);
+	expectFreshFlightRequest(manager, request_started_us + kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, ArmingDuringTransitionCancelsToSourceAndRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterTransitionToGround(manager);
+	auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+	input.armed = true;
+	const auto cancelled = update(manager, input);
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::Armed);
+	expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, BecomingAirborneDuringTransitionCancelsToSourceAndRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterTransitionToGround(manager);
+	auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+	input.landed = false;
+	const auto cancelled = update(manager, input);
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::NotLanded);
+	expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, NonFiniteSpeedDuringTransitionCancelsToSourceAndRestartsDebounce)
+{
+	for (const float speed : {std::numeric_limits<float>::infinity(),
+					 -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+		FlyingCarModeManager manager;
+		enterTransitionToGround(manager);
+		auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+		input.horizontal_speed_m_s = speed;
+		const auto cancelled = update(manager, input);
+
+		EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+		EXPECT_EQ(cancelled.rejection, FlyingCarRejection::Moving);
+		expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+	}
+}
+
+TEST(FlyingCarModeManager, ExcessiveSpeedDuringTransitionCancelsToSourceAndRestartsDebounce)
+{
+	for (const float speed : {0.21f, -0.21f}) {
+		FlyingCarModeManager manager;
+		enterTransitionToGround(manager);
+		auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+		input.horizontal_speed_m_s = speed;
+		const auto cancelled = update(manager, input);
+
+		EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+		EXPECT_EQ(cancelled.rejection, FlyingCarRejection::Moving);
+		expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+	}
+}
+
+TEST(FlyingCarModeManager, DisabledConfigurationDuringTransitionCancelsToSourceAndRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterTransitionToGround(manager);
+	auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+	input.configuration_enabled = false;
+	const auto cancelled = update(manager, input);
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::NotFlyingCar);
+	EXPECT_FALSE(cancelled.flight_output_enabled);
+	expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, UnhealthyTargetDuringTransitionCancelsAndRecoveryRestartsDebounce)
+{
+	FlyingCarModeManager manager;
+	enterTransitionToGround(manager);
+	auto input = validInput(FlyingCarMode::Ground, kTransitionDelayUs + 1);
+	input.ground_chain_ready = false;
+	const auto cancelled = update(manager, input);
+
+	EXPECT_EQ(cancelled.mode, FlyingCarMode::Flight);
+	EXPECT_EQ(cancelled.rejection, FlyingCarRejection::ChainUnhealthy);
+	expectFreshGroundRequest(manager, kTransitionDelayUs + 2);
+}
+
+TEST(FlyingCarModeManager, ExactTimeoutBoundaryRemainsInTransitionWhenDwellIsLonger)
+{
+	FlyingCarModeManager manager;
+	constexpr uint64_t timeout_us{1'000'000};
+	constexpr uint64_t delay_us{timeout_us + 1};
+	const auto first = validInput(FlyingCarMode::Ground, 0);
+	manager.update(first, kMaximumSpeedMps, delay_us, timeout_us);
+	const auto transition = validInput(FlyingCarMode::Ground, delay_us);
+	ASSERT_EQ(manager.update(transition, kMaximumSpeedMps, delay_us, timeout_us).mode,
+		  FlyingCarMode::TransitionToGround);
+
+	const auto exact_timeout = validInput(FlyingCarMode::Ground, delay_us + timeout_us);
+	const auto result = manager.update(exact_timeout, kMaximumSpeedMps, delay_us, timeout_us);
+	EXPECT_EQ(result.mode, FlyingCarMode::TransitionToGround);
+	EXPECT_EQ(result.rejection, FlyingCarRejection::None);
+}
+
+TEST(FlyingCarModeManager, SimultaneousExactTimeoutAndCompletionCompletesTransition)
+{
+	FlyingCarModeManager manager;
+	constexpr uint64_t delay_and_timeout_us{1'000'000};
+	const auto first = validInput(FlyingCarMode::Ground, 0);
+	manager.update(first, kMaximumSpeedMps, delay_and_timeout_us, delay_and_timeout_us);
+	const auto transition = validInput(FlyingCarMode::Ground, delay_and_timeout_us);
+	ASSERT_EQ(manager.update(transition, kMaximumSpeedMps, delay_and_timeout_us, delay_and_timeout_us).mode,
+		  FlyingCarMode::TransitionToGround);
+
+	const auto boundary = validInput(FlyingCarMode::Ground, 2 * delay_and_timeout_us);
+	const auto result = manager.update(boundary, kMaximumSpeedMps, delay_and_timeout_us, delay_and_timeout_us);
+	EXPECT_EQ(result.mode, FlyingCarMode::Ground);
+	EXPECT_EQ(result.rejection, FlyingCarRejection::None);
+}
+
+TEST(FlyingCarModeManager, TimeoutWinsWhenCompletionIsAlsoOverdue)
+{
+	FlyingCarModeManager manager;
+	constexpr uint64_t delay_us{500'000};
+	constexpr uint64_t timeout_us{1'000'000};
+	manager.update(validInput(FlyingCarMode::Ground, 0), kMaximumSpeedMps, delay_us, timeout_us);
+	ASSERT_EQ(manager.update(validInput(FlyingCarMode::Ground, delay_us),
+				 kMaximumSpeedMps, delay_us, timeout_us).mode,
+		  FlyingCarMode::TransitionToGround);
+
+	const auto result = manager.update(validInput(FlyingCarMode::Ground, delay_us + timeout_us + 1),
+					   kMaximumSpeedMps, delay_us, timeout_us);
+	EXPECT_EQ(result.mode, FlyingCarMode::Fault);
+	EXPECT_EQ(result.rejection, FlyingCarRejection::Timeout);
 }
 
 TEST(FlyingCarModeManager, TransitionBeyondTimeoutEntersFault)

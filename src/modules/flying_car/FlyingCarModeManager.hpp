@@ -56,6 +56,7 @@ public:
 private:
 	FlyingCarTransitionResult result(FlyingCarRejection rejection, bool transition_allowed,
 					 bool configuration_enabled) const;
+	FlyingCarTransitionResult cancelTransition(FlyingCarRejection rejection, bool configuration_enabled);
 	void clearPendingRequest();
 	static uint64_t elapsedTime(uint64_t now_us, uint64_t started_us);
 

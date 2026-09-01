@@ -13,13 +13,9 @@
 FlyingCarTransitionResult FlyingCarModeManager::update(const FlyingCarTransitionInput &input,
 		float maximum_speed_m_s, uint64_t transition_delay_us, uint64_t transition_timeout_us)
 {
-	if (!input.configuration_enabled) {
-		clearPendingRequest();
-		return result(FlyingCarRejection::NotFlyingCar, false, false);
-	}
-
 	if (_mode == FlyingCarMode::Fault) {
-		return result(FlyingCarRejection::Timeout, false, true);
+		return result(input.configuration_enabled ? FlyingCarRejection::Timeout : FlyingCarRejection::NotFlyingCar,
+			      false, input.configuration_enabled);
 	}
 
 	if (_mode == FlyingCarMode::TransitionToGround || _mode == FlyingCarMode::TransitionToFlight) {
@@ -28,11 +24,35 @@ FlyingCarTransitionResult FlyingCarModeManager::update(const FlyingCarTransition
 			return result(FlyingCarRejection::Timeout, false, true);
 		}
 
+		const FlyingCarMode target_mode = _mode == FlyingCarMode::TransitionToGround
+					     ? FlyingCarMode::Ground : FlyingCarMode::Flight;
+
+		if (!input.configuration_enabled) {
+			return cancelTransition(FlyingCarRejection::NotFlyingCar, false);
+		}
+
+		if (input.armed) {
+			return cancelTransition(FlyingCarRejection::Armed, true);
+		}
+
+		if (!input.landed) {
+			return cancelTransition(FlyingCarRejection::NotLanded, true);
+		}
+
+		if (!std::isfinite(input.horizontal_speed_m_s)
+		    || std::fabs(input.horizontal_speed_m_s) > maximum_speed_m_s) {
+			return cancelTransition(FlyingCarRejection::Moving, true);
+		}
+
+		if (input.requested_mode != target_mode) {
+			return cancelTransition(FlyingCarRejection::None, true);
+		}
+
 		const bool target_chain_ready = _mode == FlyingCarMode::TransitionToGround
 						? input.ground_chain_ready : input.flight_chain_ready;
 
 		if (!target_chain_ready) {
-			return result(FlyingCarRejection::ChainUnhealthy, false, true);
+			return cancelTransition(FlyingCarRejection::ChainUnhealthy, true);
 		}
 
 		if (elapsedTime(input.now_us, _transition_started_us) >= transition_delay_us) {
@@ -40,6 +60,11 @@ FlyingCarTransitionResult FlyingCarModeManager::update(const FlyingCarTransition
 		}
 
 		return result(FlyingCarRejection::None, true, true);
+	}
+
+	if (!input.configuration_enabled) {
+		clearPendingRequest();
+		return result(FlyingCarRejection::NotFlyingCar, false, false);
 	}
 
 	if (input.requested_mode == _mode) {
@@ -118,6 +143,15 @@ FlyingCarTransitionResult FlyingCarModeManager::result(FlyingCarRejection reject
 		configuration_enabled && _mode == FlyingCarMode::Flight,
 		configuration_enabled && _mode == FlyingCarMode::Ground,
 	};
+}
+
+FlyingCarTransitionResult FlyingCarModeManager::cancelTransition(FlyingCarRejection rejection,
+		bool configuration_enabled)
+{
+	_mode = _mode == FlyingCarMode::TransitionToGround ? FlyingCarMode::Flight : FlyingCarMode::Ground;
+	_transition_started_us = 0;
+	clearPendingRequest();
+	return result(rejection, false, configuration_enabled);
 }
 
 void FlyingCarModeManager::clearPendingRequest()
