@@ -100,7 +100,7 @@
 - `msg/FlyingCarStatus.msg`：定义飞行汽车模式、拒绝原因和控制链就绪状态的 uORB 契约。
 - `msg/CMakeLists.txt`：注册 `FlyingCarStatus.msg`，使 uORB 生成流程包含该消息。
 - `src/modules/flying_car/FlyingCarTypes.hpp`：提供与消息契约一致的强类型模式与拒绝原因枚举。
-- `src/modules/flying_car/module.yaml`、`flying_car_params.c`：定义飞行汽车身份与安全切换、轮式控制参数及默认值。
+- `src/modules/flying_car/module.yaml`：飞行汽车身份、安全切换与轮式控制参数的唯一权威定义，包含默认值和边界。
 - `src/modules/flying_car/FlyingCarModeManagerTest.cpp`：固定模式和拒绝原因的枚举契约。
 
 ### 验证
@@ -121,3 +121,5 @@
 - 命令：`Test-Path uORB/topics/flying_car_status.h`、`rg -n '#include <uORB/topics/flying_car_status\\.h>|flying_car_status_s::(MODE_|REJECTION_)' src/modules/flying_car/FlyingCarModeManagerTest.cpp`。
 - 结果：生成头文件仍不存在，已记录结构化 RED；本机无 WSL 发行版，未声称原生 PX4 编译通过。
 - `.superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-2-report.md` 已从 Git 索引移除但保留本地，并由 `.superpowers/sdd/.gitignore` 忽略。
+- 提交：`94b4fbf`（`fix: align flying car configuration metadata`）删除重复的 C 参数源，并将枚举测试直接绑定到 `flying_car_status_s` 消息常量。
+- 自审命令：`git diff HEAD --check`、`git status --short`、`git show --check --stat --oneline HEAD`；结果：无空白错误、工作树干净、修正提交仅包含预期的元数据/测试/记录变动。
