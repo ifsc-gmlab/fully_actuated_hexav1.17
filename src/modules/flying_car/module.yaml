@@ -1,0 +1,101 @@
+module_name: Flying Car
+
+parameters:
+  - group: Flying Car
+    definitions:
+      SYS_FC_TYPE:
+        description:
+          short: Flying-car physical configuration
+          long: Selects the physical flying-car configuration independently of the dynamic MAV_TYPE report.
+        type: enum
+        values:
+          0: Non-flying-car
+          1: Flying-car
+        default: 0
+
+      FC_MODE_CH:
+        description:
+          short: Flying-car mode switch RC channel
+          long: RC channel used to request a flying-car mode switch. Set to 0 to disable RC switching.
+        type: int32
+        min: 0
+        max: 18
+        default: 0
+
+      FC_BOOT_MODE:
+        description:
+          short: Flying-car boot mode
+          long: Initial flying-car mode. The initial implementation supports Flight only.
+        type: enum
+        values:
+          0: Flight
+        default: 0
+
+      FC_SW_VEL_MAX:
+        description:
+          short: Maximum switch velocity
+          long: Maximum local horizontal speed that permits a flying-car mode switch.
+        type: float
+        unit: m/s
+        min: 0
+        max: 5
+        increment: 0.01
+        decimal: 2
+        default: 0.2
+
+      FC_SW_DELAY:
+        description:
+          short: Switch safety delay
+          long: Safety-output hold and request debounce duration before a flying-car mode switch.
+        type: float
+        unit: s
+        min: 0
+        max: 10
+        increment: 0.1
+        decimal: 2
+        default: 0.5
+
+      FC_WHEEL_TRACK:
+        description:
+          short: Wheel track
+          long: Distance between the centers of the left and right wheels.
+        type: float
+        unit: m
+        min: 0.01
+        max: 10
+        increment: 0.01
+        decimal: 2
+        default: 0.5
+
+      FC_WHEEL_SPD_MAX:
+        description:
+          short: Maximum wheel speed
+          long: Maximum commanded ground speed for the flying-car differential wheel controller.
+        type: float
+        unit: m/s
+        min: 0
+        max: 20
+        increment: 0.1
+        decimal: 2
+        default: 2.0
+
+      FC_WHEEL_THR_MAX:
+        description:
+          short: Maximum wheel throttle
+          long: Maximum magnitude of the normalized wheel output.
+        type: float
+        unit: norm
+        min: 0
+        max: 1
+        increment: 0.01
+        decimal: 2
+        default: 0.5
+
+      FC_WHEEL_REV:
+        description:
+          short: Wheel direction reversal
+          long: Bitmask that reverses the left wheel with bit 0 and the right wheel with bit 1.
+        type: int32
+        min: 0
+        max: 3
+        default: 0

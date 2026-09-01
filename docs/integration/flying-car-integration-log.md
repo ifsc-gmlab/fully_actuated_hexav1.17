@@ -83,10 +83,33 @@
 - 结果：创建未修改产品代码的全驱动 PX4 v1.17 初始提交。
 - 命令：`rg -l 'Flying Car|flying_car|actuator_motors.control\[4\]' D:\flying_car\PX4-Autopilot\PX4-Autopilot\src D:\flying_car\PX4-Autopilot\PX4-Autopilot\ROMFS --glob '!**/mavlink/**'`
 - 结果：所有飞行汽车产品相关命中均已在差分清单中处置；Commander 和通用 RoverDifferential 均为拒绝直接复制。
-- 命令：`git diff --no-index` 比较 ROMFS、`msg`、`src/modules`、`boards/px4` 和仿真资源。
+- 命令：`git diff --no-index D:/flying_car/fully_actuated_hexav1.17-fullycontrol-1.17.0/fully_actuated_hexav1.17-fullycontrol-1.17.0 D:/flying_car/PX4-Autopilot/PX4-Autopilot`，并按 ROMFS、`msg`、`src/modules`、`boards/px4` 和仿真资源进行针对性比较。
 - 结果：确认参考树存在大量无关版本差异；仅将飞行汽车功能映射为后续隔离任务。
+- 命令：`git status --short`、`git log --oneline --decorate -2`、`git diff --check`。
+- 结果：完成提交 `673cee3`（`docs: map flying car reference changes`）后的自审；工作树干净且未发现空白错误。
 
 ### 风险与后续
 
 - 参考 `80003` POSIX 启动路径没有真实的六执行器 Gazebo 模型，不能作为飞行/车轮切换验证依据。
 - FMUv6X 的混合 DShot/PWM 定时器配置仍需构建和无桨台架验证。
+
+## 2026-09-01：定义飞行汽车配置、参数和状态消息
+
+### 修改文件
+
+- `msg/FlyingCarStatus.msg`：定义飞行汽车模式、拒绝原因和控制链就绪状态的 uORB 契约。
+- `msg/CMakeLists.txt`：注册 `FlyingCarStatus.msg`，使 uORB 生成流程包含该消息。
+- `src/modules/flying_car/FlyingCarTypes.hpp`：提供与消息契约一致的强类型模式与拒绝原因枚举。
+- `src/modules/flying_car/module.yaml`、`flying_car_params.c`：定义飞行汽车身份与安全切换、轮式控制参数及默认值。
+- `src/modules/flying_car/FlyingCarModeManagerTest.cpp`：固定模式和拒绝原因的枚举契约。
+
+### 验证
+
+- 先确认 `uORB/topics/flying_car_status.h` 不存在；在 `FlyingCarTypes.hpp` 创建前添加枚举一致性测试，并记录头文件缺失的结构化 RED。
+- 使用 `rg` 和参数元数据解析检查消息常量、字段、参数默认值与消息注册。
+- 运行 `git diff --check` 检查空白错误。
+- 本机没有可用 WSL 发行版，无法运行原生 PX4 `make px4_sitl_default` 或 `make metadata_parameters`；未声称构建通过。
+
+### 风险与后续
+
+- 仍需在具备 Linux/PX4 构建环境的主机上生成 uORB 头文件、参数元数据并编译验证。
