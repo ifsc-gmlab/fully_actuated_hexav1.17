@@ -69,3 +69,24 @@
 #### 风险与后续
 
 - 尚未解决的问题及下一步。
+
+## 2026-09-01：建立可恢复基线与参考差分清单
+
+### 修改文件
+
+- `docs/integration/flying-car-reference-manifest.md`：记录只读参考树中飞行汽车相关资源的 `copy`、`rewrite` 或 `reject` 处置；明确排除生成内容、子模块、翻译、行尾差异和无关版本漂移。
+- `docs/integration/flying-car-integration-log.md`：记录本次基线与清单工作。
+
+### 验证
+
+- 命令：`git add -A`，`git commit -m "chore: snapshot fully actuated PX4 v1.17 baseline"`
+- 结果：创建未修改产品代码的全驱动 PX4 v1.17 初始提交。
+- 命令：`rg -l 'Flying Car|flying_car|actuator_motors.control\[4\]' D:\flying_car\PX4-Autopilot\PX4-Autopilot\src D:\flying_car\PX4-Autopilot\PX4-Autopilot\ROMFS --glob '!**/mavlink/**'`
+- 结果：所有飞行汽车产品相关命中均已在差分清单中处置；Commander 和通用 RoverDifferential 均为拒绝直接复制。
+- 命令：`git diff --no-index` 比较 ROMFS、`msg`、`src/modules`、`boards/px4` 和仿真资源。
+- 结果：确认参考树存在大量无关版本差异；仅将飞行汽车功能映射为后续隔离任务。
+
+### 风险与后续
+
+- 参考 `80003` POSIX 启动路径没有真实的六执行器 Gazebo 模型，不能作为飞行/车轮切换验证依据。
+- FMUv6X 的混合 DShot/PWM 定时器配置仍需构建和无桨台架验证。
