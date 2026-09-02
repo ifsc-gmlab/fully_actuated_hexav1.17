@@ -439,6 +439,7 @@ bool MixingOutput::update()
 	// update topics
 	for (int i = 0; i < MAX_ACTUATORS && _function_allocated[i]; ++i) {
 		_function_allocated[i]->update();
+		has_updates |= _function_allocated[i]->updated();
 	}
 
 	if (_has_backup_schedule) {

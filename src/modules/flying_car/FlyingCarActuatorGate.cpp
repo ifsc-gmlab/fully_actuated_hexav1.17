@@ -29,7 +29,8 @@ float finiteConstrainedWheelOrNeutral(float value)
 
 FlyingCarActuatorGateOutput safeOutput(bool bypass)
 {
-	return {bypass, {NAN, NAN, NAN, NAN, 0.f, 0.f}, 0};
+	return {bypass, {NAN, NAN, NAN, NAN, 0.f, 0.f},
+		static_cast<uint16_t>(bypass ? 0 : kWheelReversibleFlags)};
 }
 
 } // namespace

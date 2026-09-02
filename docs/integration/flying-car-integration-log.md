@@ -224,3 +224,12 @@
 
 - 必须在 Linux PX4 环境生成 uORB/参数头并完成 SITL、FMUv6X 和 `mixer_module_tests` 原生编译运行。
 - AUX1–4 DShot600 与 AUX5–6 50 Hz 可逆 PWM 的硬件定时器分组、首个专用样本接管和失效安全值仍需无桨台架确认。
+
+## 2026-09-02：Task 5 安全审查修复
+
+- `FunctionMotors` 在首个专用样本后永久锁存飞行汽车源；200 ms 未更新时不回退原生 `actuator_motors`，而是输出旋翼 `NaN`、车轮零值及可逆位 `48`。
+- 专用话题回调参与 mixer 的更新判定，支持仅有飞行汽车样本时驱动物理/仿真输出；原有 provider 通过默认 `updated()` 保持接口兼容。
+- 模块正常退出前发布最终安全帧；地面链路同时要求时间戳新鲜且油门/转向有限，Ground 的 `timestamp_sample` 取两路 Rover 输入中较早者。
+- 对速度阈值、切换延时和车轮限幅做有限值与范围清洗；切换超时调整为 12 s，至少比最大 10 s 驻留延时多 1 s。
+- 所有非旁路飞行汽车模式均保持 Motor5/6 可逆位 `48`，避免零轮速被非可逆映射转换为反向满量程。
+- 本轮严格独立 helper/gate/provider/stop harness 已通过，`git diff --check` 通过；由于本机缺少 Linux PX4 工具链，原生 `mixer_module_tests`、SITL 和 FMUv6X 构建仍留到 Task 9。

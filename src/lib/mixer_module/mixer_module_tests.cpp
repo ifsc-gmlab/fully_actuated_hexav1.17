@@ -93,6 +93,7 @@ public:
 	{
 		memcpy(outputs, outputs_, sizeof(outputs));
 		num_outputs = num_outputs_;
+		last_num_control_groups_updated = num_control_groups_updated;
 		++num_updates;
 		return true;
 	}
@@ -181,12 +182,14 @@ public:
 		memset(outputs, 0, sizeof(outputs));
 		num_outputs = 0;
 		num_updates = 0;
+		last_num_control_groups_updated = 0;
 		mixer_changed = false;
 	}
 
 	uint16_t outputs[MAX_ACTUATORS] {};
 	int num_outputs{0};
 	int num_updates{0};
+	unsigned last_num_control_groups_updated{0};
 	bool was_scheduled{false};
 	bool mixer_changed{false};
 
@@ -571,6 +574,7 @@ TEST_F(MixerModuleTest, dedicatedFlyingCarMotorSourceLatchesAfterSafeSample)
 	mixing_output.setAllMinValues(MIN_VALUE);
 	mixing_output.setAllCenterValues(CENTER_VALUE);
 	mixing_output.setAllMaxValues(MAX_VALUE);
+	EXPECT_TRUE(mixing_output.updateSubscriptions(false));
 	test_module.sendActuatorArmed(true);
 
 	// Standard-only configurations retain the existing source and transformation.
@@ -584,6 +588,7 @@ TEST_F(MixerModuleTest, dedicatedFlyingCarMotorSourceLatchesAfterSafeSample)
 	test_module.sendFlyingCarMotors({NAN, NAN, NAN, NAN, 0.f, 0.f, NAN, NAN, NAN, NAN, NAN, NAN},
 			(1u << 4) | (1u << 5));
 	mixing_output.update();
+	EXPECT_EQ(test_module.last_num_control_groups_updated, 1u);
 	EXPECT_EQ(test_module.outputs[0], DISARMED_VALUE);
 	EXPECT_EQ(test_module.outputs[3], DISARMED_VALUE);
 	EXPECT_EQ(test_module.outputs[4], CENTER_VALUE);
@@ -594,6 +599,7 @@ TEST_F(MixerModuleTest, dedicatedFlyingCarMotorSourceLatchesAfterSafeSample)
 	test_module.sendFlyingCarMotors({0.5f, NAN, NAN, NAN, -0.5f, 0.5f, NAN, NAN, NAN, NAN, NAN, NAN},
 			(1u << 4) | (1u << 5));
 	mixing_output.update();
+	EXPECT_EQ(test_module.last_num_control_groups_updated, 1u);
 	EXPECT_EQ(test_module.outputs[0], (MAX_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
 	EXPECT_EQ(test_module.outputs[4], (CENTER_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
 	EXPECT_EQ(test_module.outputs[5], (MAX_VALUE - CENTER_VALUE) * 0.5f + CENTER_VALUE);

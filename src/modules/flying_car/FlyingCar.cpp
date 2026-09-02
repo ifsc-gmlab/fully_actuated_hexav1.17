@@ -13,6 +13,7 @@
 #include <px4_platform_common/log.h>
 
 #include <algorithm>
+
 FlyingCar::FlyingCar() :
 	ModuleParams(nullptr),
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::rate_ctrl)
@@ -20,6 +21,7 @@ FlyingCar::FlyingCar() :
 	_local_position.vx = NAN;
 	_local_position.vy = NAN;
 	updateParams();
+	refreshParameters();
 }
 
 FlyingCar::~FlyingCar()
@@ -57,6 +59,7 @@ void FlyingCar::updateSubscriptions()
 		parameter_update_s parameter_update{};
 		_parameter_update_sub.copy(&parameter_update);
 		updateParams();
+		refreshParameters();
 	}
 
 	_vehicle_status_sub.update(&_vehicle_status);
@@ -78,9 +81,16 @@ void FlyingCar::updateSubscriptions()
 	_rover_steering_setpoint_sub.update(&_steering_setpoint);
 }
 
+void FlyingCar::refreshParameters()
+{
+	_runtime_parameters = FlyingCarRuntimeHelpers::sanitizeParameters(
+		_param_fc_sw_vel_max.get(), _param_fc_sw_delay.get(), _param_fc_wheel_thr_max.get());
+}
+
 void FlyingCar::Run()
 {
 	if (should_exit()) {
+		publishInitialSafeOutput(hrt_absolute_time());
 		exit_and_cleanup();
 		return;
 	}
@@ -92,12 +102,10 @@ void FlyingCar::Run()
 
 	const bool flight_chain_ready = FlyingCarRuntimeHelpers::flightChainReady(
 		now_us, _actuator_motors.timestamp, _actuator_motors.timestamp_sample, rotor_controls);
-	const bool ground_chain_ready = FlyingCarRuntimeHelpers::isFresh(
-			now_us, _throttle_setpoint.timestamp, FlyingCarRuntimeHelpers::kGroundInputTimeoutUs)
-		&& FlyingCarRuntimeHelpers::isFresh(
-			now_us, _steering_setpoint.timestamp, FlyingCarRuntimeHelpers::kGroundInputTimeoutUs);
+	const bool ground_chain_ready = FlyingCarRuntimeHelpers::groundChainReady(
+		now_us, _throttle_setpoint.timestamp, _throttle_setpoint.throttle_body_x,
+		_steering_setpoint.timestamp, _steering_setpoint.normalized_steering_setpoint);
 	const bool armed = _vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED;
-	const uint64_t transition_delay_us = static_cast<uint64_t>(std::max(_param_fc_sw_delay.get(), 0.f) * 1e6f);
 
 	const FlyingCarTransitionInput input{
 		_param_sys_fc_type.get() == 1,
@@ -110,7 +118,8 @@ void FlyingCar::Run()
 		now_us,
 	};
 	const FlyingCarTransitionResult transition = _mode_manager.update(
-		input, _param_fc_sw_vel_max.get(), transition_delay_us, kTransitionTimeoutUs);
+		input, _runtime_parameters.maximum_speed_m_s, _runtime_parameters.transition_delay_us,
+		FlyingCarRuntimeHelpers::kTransitionTimeoutUs);
 
 	publishActuators(transition, flight_chain_ready, ground_chain_ready, now_us);
 	publishStatus(transition, flight_chain_ready, ground_chain_ready, now_us);
@@ -148,20 +157,23 @@ void FlyingCar::publishActuators(const FlyingCarTransitionResult &transition, bo
 		wheel_controls = FlyingCarDifferentialControl::mix(
 			_throttle_setpoint.throttle_body_x,
 			_steering_setpoint.normalized_steering_setpoint,
-			_param_fc_wheel_thr_max.get(),
+			_runtime_parameters.wheel_limit,
 			static_cast<uint8_t>(_param_fc_wheel_rev.get()));
 	}
 
 	// The runtime was allowed to start only for this physical configuration. If the parameter is
 	// changed afterward, continue publishing safe values because the output provider is already latched.
 	const bool configuration_enabled = _param_sys_fc_type.get() == 1;
+	const FlyingCarMode output_mode = configuration_enabled ? transition.mode : FlyingCarMode::Fault;
 	const FlyingCarActuatorGateOutput gated = FlyingCarActuatorGate::apply(
-		configuration_enabled, transition.mode, rotor_controls, wheel_controls);
+		true, output_mode, rotor_controls, wheel_controls);
 
 	flying_car_actuator_motors_s output{};
 	output.timestamp = now_us;
-	output.timestamp_sample = flight_chain_ready ? _actuator_motors.timestamp_sample : now_us;
-	output.reversible_flags = gated.reversible_flags | kWheelReversibleFlags;
+	output.timestamp_sample = FlyingCarRuntimeHelpers::outputSampleTimestamp(
+		output_mode, now_us, _actuator_motors.timestamp_sample,
+		_throttle_setpoint.timestamp, _steering_setpoint.timestamp);
+	output.reversible_flags = gated.reversible_flags;
 
 	for (float &control : output.control) {
 		control = NAN;

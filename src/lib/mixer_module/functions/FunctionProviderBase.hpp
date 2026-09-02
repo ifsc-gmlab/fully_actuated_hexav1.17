@@ -54,6 +54,7 @@ public:
 	virtual ~FunctionProviderBase() = default;
 
 	virtual void update() = 0;
+	virtual bool updated() const { return false; }
 
 	/**
 	 * Get the current output value for a given function

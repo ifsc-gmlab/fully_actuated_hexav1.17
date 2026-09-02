@@ -15,6 +15,12 @@
 #include <cstdint>
 #include <limits>
 
+struct FlyingCarRuntimeParameters {
+	float maximum_speed_m_s;
+	uint64_t transition_delay_us;
+	float wheel_limit;
+};
+
 class FlyingCarRuntimeHelpers
 {
 public:
@@ -71,9 +77,64 @@ public:
 		return true;
 	}
 
+	static bool groundChainReady(uint64_t now_us, uint64_t throttle_timestamp_us, float throttle,
+			uint64_t steering_timestamp_us, float steering)
+	{
+		return std::isfinite(throttle) && std::isfinite(steering)
+		       && isFresh(now_us, throttle_timestamp_us, kGroundInputTimeoutUs)
+		       && isFresh(now_us, steering_timestamp_us, kGroundInputTimeoutUs);
+	}
+
+	static FlyingCarRuntimeParameters sanitizeParameters(float maximum_speed_m_s, float transition_delay_s,
+			float wheel_limit)
+	{
+		maximum_speed_m_s = std::isfinite(maximum_speed_m_s) ? maximum_speed_m_s : kDefaultMaximumSpeedMS;
+		transition_delay_s = std::isfinite(transition_delay_s) ? transition_delay_s : kDefaultTransitionDelayS;
+		wheel_limit = std::isfinite(wheel_limit) ? wheel_limit : kDefaultWheelLimit;
+
+		if (maximum_speed_m_s < 0.f) { maximum_speed_m_s = 0.f; }
+
+		if (maximum_speed_m_s > kMaximumSpeedMS) { maximum_speed_m_s = kMaximumSpeedMS; }
+
+		if (transition_delay_s < 0.f) { transition_delay_s = 0.f; }
+
+		if (transition_delay_s > kMaximumTransitionDelayS) { transition_delay_s = kMaximumTransitionDelayS; }
+
+		if (wheel_limit < 0.f) { wheel_limit = 0.f; }
+
+		if (wheel_limit > 1.f) { wheel_limit = 1.f; }
+
+		return {maximum_speed_m_s, static_cast<uint64_t>(transition_delay_s * 1e6f), wheel_limit};
+	}
+
+	static uint64_t outputSampleTimestamp(FlyingCarMode mode, uint64_t now_us, uint64_t flight_sample_timestamp_us,
+			uint64_t throttle_timestamp_us, uint64_t steering_timestamp_us)
+	{
+		if (mode == FlyingCarMode::Flight) {
+			return flight_sample_timestamp_us;
+		}
+
+		if (mode == FlyingCarMode::Ground) {
+			return throttle_timestamp_us < steering_timestamp_us ? throttle_timestamp_us : steering_timestamp_us;
+		}
+
+		return now_us;
+	}
+
 	static constexpr uint64_t kFlightInputTimeoutUs{200'000};
 	static constexpr uint64_t kGroundInputTimeoutUs{500'000};
+	static constexpr float kDefaultMaximumSpeedMS{0.2f};
+	static constexpr float kMaximumSpeedMS{5.f};
+	static constexpr float kDefaultTransitionDelayS{0.5f};
+	static constexpr float kMaximumTransitionDelayS{10.f};
+	static constexpr uint64_t kMaximumTransitionDelayUs{10'000'000};
+	static constexpr uint64_t kTransitionTimeoutUs{12'000'000};
+	static constexpr float kDefaultWheelLimit{0.5f};
 };
+
+static_assert(FlyingCarRuntimeHelpers::kTransitionTimeoutUs
+	      >= FlyingCarRuntimeHelpers::kMaximumTransitionDelayUs + 1'000'000,
+	      "transition timeout must retain at least one second beyond the maximum configured dwell");
 
 #ifndef FLYING_CAR_RUNTIME_HELPERS_ONLY
 
@@ -115,6 +176,7 @@ public:
 private:
 	void Run() override;
 	void updateSubscriptions();
+	void refreshParameters();
 	void publishActuators(const FlyingCarTransitionResult &transition, bool flight_chain_ready,
 			bool ground_chain_ready, uint64_t now_us);
 	void publishInitialSafeOutput(uint64_t now_us);
@@ -123,7 +185,6 @@ private:
 
 	static constexpr uint64_t kRunIntervalUs{10'000};
 	static constexpr uint64_t kStatusIntervalUs{500'000};
-	static constexpr uint64_t kTransitionTimeoutUs{5'000'000};
 	static constexpr uint16_t kWheelReversibleFlags{(1u << 4) | (1u << 5)};
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1'000'000};
@@ -151,6 +212,7 @@ private:
 	flying_car_status_s _last_status{};
 	uint64_t _last_status_publish{0};
 	bool _have_status{false};
+	FlyingCarRuntimeParameters _runtime_parameters{};
 
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::SYS_FC_TYPE>) _param_sys_fc_type,

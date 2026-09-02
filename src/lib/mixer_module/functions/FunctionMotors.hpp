@@ -70,11 +70,14 @@ public:
 
 	void update() override
 	{
+		_updated = false;
 		flying_car_actuator_motors_s flying_car_data{};
 
 		// The dedicated gated source wins the first time it appears and remains selected until reboot.
 		if (_flying_car_topic.update(&flying_car_data)) {
 			_flying_car_source_latched = true;
+			_flying_car_source_stale = false;
+			_last_flying_car_update = hrt_absolute_time();
 			_data.timestamp = flying_car_data.timestamp;
 			_data.timestamp_sample = flying_car_data.timestamp_sample;
 			_data.reversible_flags = flying_car_data.reversible_flags;
@@ -84,11 +87,29 @@ public:
 			}
 
 			updateValues(_data.reversible_flags, _thrust_factor, _data.control, actuator_motors_s::NUM_CONTROLS);
+			_updated = true;
 
 		} else if (!_flying_car_source_latched && _topic.update(&_data)) {
 			updateValues(_data.reversible_flags, _thrust_factor, _data.control, actuator_motors_s::NUM_CONTROLS);
+			_updated = true;
+		}
+
+		if (_flying_car_source_latched) {
+			// Drain the standard callback without allowing it to overwrite the latched gated source.
+			actuator_motors_s ignored_standard_data{};
+			_topic.update(&ignored_standard_data);
+			const hrt_abstime now = hrt_absolute_time();
+			const hrt_abstime elapsed = now >= _last_flying_car_update ? now - _last_flying_car_update : 0;
+
+			if (!_flying_car_source_stale && elapsed >= kFlyingCarSourceTimeoutUs) {
+				setFlyingCarSafeValues(now);
+				_flying_car_source_stale = true;
+				_updated = true;
+			}
 		}
 	}
+
+	bool updated() const override { return _updated; }
 
 	float value(OutputFunction func) override { return _data.control[(int)func - (int)OutputFunction::Motor1]; }
 
@@ -155,10 +176,29 @@ public:
 	bool reversible(OutputFunction func) const override { return _data.reversible_flags & (1u << ((int)func - (int)OutputFunction::Motor1)); }
 
 private:
+	void setFlyingCarSafeValues(hrt_abstime now)
+	{
+		_data.timestamp = now;
+		_data.timestamp_sample = now;
+		_data.reversible_flags = (1u << 4) | (1u << 5);
+
+		for (float &control : _data.control) {
+			control = NAN;
+		}
+
+		_data.control[4] = 0.f;
+		_data.control[5] = 0.f;
+		updateValues(_data.reversible_flags, _thrust_factor, _data.control, actuator_motors_s::NUM_CONTROLS);
+	}
+
+	static constexpr hrt_abstime kFlyingCarSourceTimeoutUs{200'000};
 	uORB::SubscriptionCallbackWorkItem _topic;
 	uORB::SubscriptionCallbackWorkItem _flying_car_topic;
 	actuator_motors_s _data{};
 	bool _flying_car_source_latched{false};
+	bool _flying_car_source_stale{false};
+	bool _updated{false};
 	bool _flying_car_callback_registered{false};
+	hrt_abstime _last_flying_car_update{0};
 	const float &_thrust_factor;
 };

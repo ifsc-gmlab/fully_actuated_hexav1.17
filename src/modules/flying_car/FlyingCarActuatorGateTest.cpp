@@ -53,7 +53,7 @@ TEST(FlyingCarActuatorGate, FlightPassesFiniteRotorsAndNeutralizesWheels)
 	EXPECT_FLOAT_EQ(output.controls[2], 0.3f);
 	EXPECT_FLOAT_EQ(output.controls[3], 0.4f);
 	expectWheelsNeutral(output);
-	EXPECT_EQ(output.reversible_flags, 0);
+	EXPECT_EQ(output.reversible_flags, static_cast<uint16_t>(48));
 }
 
 TEST(FlyingCarActuatorGate, FlightDisablesEachNonFiniteRotor)
@@ -68,7 +68,7 @@ TEST(FlyingCarActuatorGate, FlightDisablesEachNonFiniteRotor)
 	EXPECT_TRUE(std::isnan(output.controls[2]));
 	EXPECT_FLOAT_EQ(output.controls[3], 0.4f);
 	expectWheelsNeutral(output);
-	EXPECT_EQ(output.reversible_flags, 0);
+	EXPECT_EQ(output.reversible_flags, static_cast<uint16_t>(48));
 }
 
 TEST(FlyingCarActuatorGate, GroundDisablesRotorsAndPassesConstrainedWheels)
@@ -103,6 +103,6 @@ TEST(FlyingCarActuatorGate, TransitionFaultAndInvalidModeUseSafeOutputs)
 		EXPECT_FALSE(output.bypass);
 		expectRotorsDisabled(output);
 		expectWheelsNeutral(output);
-		EXPECT_EQ(output.reversible_flags, 0);
+		EXPECT_EQ(output.reversible_flags, static_cast<uint16_t>(48));
 	}
 }
