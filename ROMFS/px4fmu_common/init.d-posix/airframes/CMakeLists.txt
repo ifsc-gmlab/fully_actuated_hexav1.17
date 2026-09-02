@@ -124,3 +124,9 @@ px4_add_romfs_files(
 
 	# [22000, 22999] Reserve for custom models
 )
+
+if(CONFIG_MODULES_FLYING_CAR)
+	px4_add_romfs_files(
+		80003_flying_car
+	)
+endif()

@@ -24,6 +24,15 @@ then
 fi
 
 #
+# Flying car setup.
+#
+if [ $VEHICLE_TYPE = flying_car ]
+then
+	# Start the native multicopter chain plus the isolated flying-car module.
+	. ${R}etc/init.d/rc.flying_car_apps
+fi
+
+#
 # UGV setup.
 #
 if [ $VEHICLE_TYPE = rover ]

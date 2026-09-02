@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# SITL inherits the same configuration identity. Hardware timer and PWM
+# calibration remain exclusively in the real-hardware airframe.
+#
+
+. ${R}etc/init.d/rc.flying_car_defaults
+
+param set-default COM_DISARM_LAND -1

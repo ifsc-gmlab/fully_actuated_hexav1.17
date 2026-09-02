@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# Flying-car defaults: retain the native multicopter control contract and set
+# one permanent physical-configuration identity for airframe 80003.
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+set VEHICLE_TYPE flying_car
+param set-default SYS_FC_TYPE 1
+param set-default MAV_TYPE 2

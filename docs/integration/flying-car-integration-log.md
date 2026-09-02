@@ -233,3 +233,27 @@
 - 对速度阈值、切换延时和车轮限幅做有限值与范围清洗；切换超时调整为 12 s，至少比最大 10 s 驻留延时多 1 s。
 - 所有非旁路飞行汽车模式均保持 Motor5/6 可逆位 `48`，避免零轮速被非可逆映射转换为反向满量程。
 - 本轮严格独立 helper/gate/provider/stop harness 已通过，`git diff --check` 通过；由于本机缺少 Linux PX4 工具链，原生 `mixer_module_tests`、SITL 和 FMUv6X 构建仍留到 Task 9。
+
+## 2026-09-02：注册 80003 机架与隔离启动
+
+### 修改文件
+
+- `ROMFS/px4fmu_common/init.d/airframes/80003_flying_car`：增加真机 80003；使用原生四旋翼分配、Motor1–4 旋翼、Motor5–6 可逆车轮、`CA_R_REV=48`，并设置 Pixhawk 6X AUX1–4 DShot600、AUX5–6 50 Hz PWM 与车轮 1500/1100..1900 微秒安全范围。
+- `ROMFS/px4fmu_common/init.d-posix/airframes/80003_flying_car`：增加同一构型身份和六路仿真输出映射，专用 `flying_car` GZ 模型由 Task 8 提供。
+- `rc.flying_car_defaults`、`rc.flying_car_sitl_defaults`：在不改写 `rc.mc_defaults` 的前提下设置 `VEHICLE_TYPE=flying_car` 与 `SYS_FC_TYPE=1`。
+- `rc.flying_car_apps`、`rc.vehicle_setup`：复用未修改的 `rc.mc_apps`，仅在 flying-car 分支追加一次 `flying_car start`。
+- 三处 ROMFS CMake 注册与 `test/romfs/test_flying_car_airframe.py`：按模块配置收录脚本/airframe，并固定注册唯一性、真机映射及普通机架启动隔离。
+- `boards/px4/sitl/default.px4board`：选择飞行汽车模块，使 POSIX 80003 注册与其启动命令在默认 SITL 目标中同时可用。
+
+### 验证
+
+- RED：产品脚本创建前运行 `python test/romfs/test_flying_car_airframe.py`，得到预期的 `FAILED (failures=1, errors=3)`；缺失 80003 注册及三个新脚本触发失败，普通启动脚本隔离检查已通过。
+- GREEN：实现后运行同一命令，结果 `Ran 5 tests ... OK`。
+- 追加 POSIX 构建选择检查先得到预期的单项 RED，加入 SITL 模块选择后最终结果为 `Ran 6 tests ... OK`。
+- `rg -n "80003_flying_car"` 显示硬件与 POSIX CMake 注册表各恰好一次；`rg -n "^flying_car start$" ... -g "rc.*_apps"` 仅命中 `rc.flying_car_apps`。
+- 通用 MC、Rover、控制分配及 6003/6004 定向 `git diff` 为空；`git diff --check` 通过。
+
+### 限制与后续
+
+- 本机 `make` 不可用，`wsl.exe -l -q` 以退出码 1 报告未安装 Linux 发行版，因此没有运行或声称 `metadata_airframes`、SITL 启动或 FMUv6X 固件构建通过。
+- POSIX airframe 已声明 `PX4_SIM_MODEL=flying_car`，其四旋翼加双轮模型和六路动力学验证属于 Task 8；真机混合协议仍必须通过无桨台架确认。

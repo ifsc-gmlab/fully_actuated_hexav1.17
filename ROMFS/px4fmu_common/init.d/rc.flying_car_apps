@@ -1,0 +1,8 @@
+#!/bin/sh
+#
+# Reuse the unmodified multicopter chain and add only the isolated flying-car
+# mode manager and output gate.
+#
+
+. ${R}etc/init.d/rc.mc_apps
+flying_car start

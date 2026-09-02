@@ -113,6 +113,12 @@ if(CONFIG_MODULES_MC_RATE_CONTROL)
 	)
 endif()
 
+if(CONFIG_MODULES_FLYING_CAR)
+	px4_add_romfs_files(
+		80003_flying_car
+	)
+endif()
+
 if(CONFIG_MODULES_FW_RATE_CONTROL)
 	px4_add_romfs_files(
 		# [2000, 2999] Standard planes
