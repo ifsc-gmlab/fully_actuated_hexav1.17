@@ -272,3 +272,9 @@
 - GREEN：`g++.exe -std=c++17 -Wall -Wextra -Werror test/flying_car_commander_safety_test.cpp` 编译运行退出码 0，覆盖普通构型零干预、缺失/陈旧/未来状态、两个过渡、Fault、稳定状态及稳定类型保持/复位。
 - `rg -n 'flying_car_switch_to_|rover_differential_main|control_allocator_main' src/modules/commander` 无命中；`git diff --check` 通过。
 - 本机没有可用 `make` 且 WSL 无 Linux 发行版，因此未运行或声称 Commander 原生 GoogleTest、SITL 或 FMUv6X 构建通过；这些验证保留到 Task 9 的受支持 Linux PX4 环境。
+
+### Task 7 安全复审修复
+
+- 复审发现 `arm()` 的 RC 五秒重解锁宽限和 `run_preflight_checks=false` 路径会跳过 SystemChecks。现已在宽限与可选预检分支之前增加独立、无条件的飞行汽车入口门。
+- `SYS_FC_TYPE=1` 时，Commander 从构造/参数启用起默认保持入口锁定；只有同一循环中处理到新鲜稳定状态后才允许任何来源进入解锁。SystemChecks 原诊断继续保留，但不再是安全门的唯一执行点。
+- 新增 RED/GREEN 用例固定入口真值表：普通构型旁路，飞行汽车仅在锁定为 false 时允许；严格 helper 编译运行退出码 0。

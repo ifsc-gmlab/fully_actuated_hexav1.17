@@ -286,6 +286,7 @@ private:
 	bool _mission_in_progress{false};
 	bool _flying_car_status_received{false};
 	bool _flying_car_enabled{false};
+	bool _flying_car_arming_locked{true};
 	FlyingCarSafety _flying_car_safety{};
 	flying_car_status_s _flying_car_status{};
 

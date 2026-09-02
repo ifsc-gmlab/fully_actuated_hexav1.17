@@ -563,6 +563,16 @@ transition_result_t Commander::arm(arm_disarm_reason_t calling_reason, bool run_
 		return TRANSITION_DENIED;
 	}
 
+	// This gate is intentionally independent of optional preflight checks and the RC re-arm grace period.
+	if (!FlyingCarSafety::armingEntryAllowed(_flying_car_enabled, _flying_car_arming_locked)) {
+		mavlink_log_critical(&_mavlink_log_pub, "Arming denied: flying-car mode status is not stable\t");
+		events::send(events::ID("commander_arm_denied_flying_car_not_stable"),
+			     {events::Log::Critical, events::LogInternal::Info},
+			     "Arming denied: flying-car mode status is not stable");
+		tune_negative(true);
+		return TRANSITION_DENIED;
+	}
+
 	// allow a grace period for re-arming: preflight checks don't need to pass during that time, for example for accidental in-air disarming
 	if (calling_reason == arm_disarm_reason_t::rc_switch
 	    && ((_last_disarmed_timestamp != 0) && (hrt_elapsed_time(&_last_disarmed_timestamp) < 5_s))) {
@@ -1748,6 +1758,7 @@ void Commander::updateParameters()
 	if (flying_car_enabled != _flying_car_enabled) {
 		_flying_car_enabled = flying_car_enabled;
 		_flying_car_status_received = false;
+		_flying_car_arming_locked = flying_car_enabled;
 		_flying_car_safety.reset();
 	}
 
@@ -1788,6 +1799,7 @@ void Commander::updateParameters()
 void Commander::flyingCarStatusUpdate()
 {
 	if (!_flying_car_enabled) {
+		_flying_car_arming_locked = false;
 		_health_and_arming_checks.setFlyingCarArmingLocked(false);
 		return;
 	}
@@ -1807,6 +1819,7 @@ void Commander::flyingCarStatusUpdate()
 	const auto mode = static_cast<FlyingCarSafety::Mode>(_flying_car_status.mode);
 	const auto result = FlyingCarSafety::evaluate(true, _flying_car_status_received, hrt_absolute_time(),
 			    _flying_car_status.timestamp, mode);
+	_flying_car_arming_locked = result.arming_locked;
 	_health_and_arming_checks.setFlyingCarArmingLocked(result.arming_locked);
 
 	if (result.status_fresh) {

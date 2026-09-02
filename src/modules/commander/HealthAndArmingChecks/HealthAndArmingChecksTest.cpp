@@ -75,6 +75,9 @@ TEST(FlyingCarSafetyTest, ArmingAndStableTypeIsolation)
 	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToGround).arming_locked);
 	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToFlight).arming_locked);
 	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::Fault).arming_locked);
+	EXPECT_TRUE(Safety::armingEntryAllowed(false, true));
+	EXPECT_TRUE(Safety::armingEntryAllowed(true, false));
+	EXPECT_FALSE(Safety::armingEntryAllowed(true, true));
 
 	Safety tracker;
 	EXPECT_EQ(tracker.stableType(), Safety::StableType::Flight);

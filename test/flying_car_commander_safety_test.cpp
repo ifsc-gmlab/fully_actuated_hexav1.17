@@ -17,6 +17,9 @@ int main()
 	assert(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToGround).arming_locked);
 	assert(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToFlight).arming_locked);
 	assert(Safety::evaluate(true, true, now, now, Safety::Mode::Fault).arming_locked);
+	assert(Safety::armingEntryAllowed(false, true));
+	assert(Safety::armingEntryAllowed(true, false));
+	assert(!Safety::armingEntryAllowed(true, true));
 
 	Safety tracker;
 	assert(tracker.stableType() == Safety::StableType::Flight);

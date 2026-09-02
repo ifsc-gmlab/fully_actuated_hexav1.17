@@ -24,6 +24,11 @@ public:
 		return {enabled && (!fresh || !stable), fresh};
 	}
 
+	static constexpr bool armingEntryAllowed(bool enabled, bool arming_locked)
+	{
+		return !enabled || !arming_locked;
+	}
+
 	void acceptStableMode(Mode mode)
 	{
 		if (mode == Mode::Flight) { _stable_type = StableType::Flight; }
