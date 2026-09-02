@@ -137,12 +137,15 @@ public:
 	bool isArmingRequest() const { return _is_arming_request; }
 
 	void setIsArmingRequest(bool is_arming_request) { _is_arming_request = is_arming_request; }
+	void setFlyingCarArmingLocked(bool locked) { _flying_car_arming_locked = locked; }
+	bool flyingCarArmingLocked() const { return _flying_car_arming_locked; }
 
 	const vehicle_status_s &status() const { return _status; }
 
 private:
 	const vehicle_status_s &_status;
 	bool _is_arming_request{false};	// true if we currently have an arming request
+	bool _flying_car_arming_locked{false};
 };
 
 

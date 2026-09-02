@@ -39,6 +39,12 @@
 
 void SystemChecks::checkAndReport(const Context &context, Report &reporter)
 {
+	if (context.flyingCarArmingLocked() && !context.isArmed()) {
+		reporter.armingCheckFailure(NavModes::All, health_component_t::system,
+					    events::ID("check_system_flying_car_not_stable"), events::Log::Error,
+					    "Flying-car mode status is not stable");
+	}
+
 	actuator_armed_s actuator_armed;
 
 	if (_actuator_armed_sub.copy(&actuator_armed)) {

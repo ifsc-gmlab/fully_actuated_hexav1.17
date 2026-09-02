@@ -257,3 +257,18 @@
 
 - 本机 `make` 不可用，`wsl.exe -l -q` 以退出码 1 报告未安装 Linux 发行版，因此没有运行或声称 `metadata_airframes`、SITL 启动或 FMUv6X 固件构建通过。
 - POSIX airframe 已声明 `PX4_SIM_MODEL=flying_car`，其四旋翼加双轮模型和六路动力学验证属于 Task 8；真机混合协议仍必须通过无桨台架确认。
+
+## 2026-09-02：Commander 窄安全集成
+
+- Commander 增加唯一的 `flying_car_status` 订阅；仅当 `SYS_FC_TYPE=1` 时消费，普通机架不改变解锁检查或车辆类型。
+- 状态未收到、时间戳超过 1 s、时间戳位于未来、Transition、Fault 或未知模式均锁定解锁；稳定 Flight/Ground 继续执行原有全部健康检查。
+- 启动时尚无稳定状态以 Flight/四旋翼作为安全报告默认；只有新鲜稳定状态可更新记忆类型。Transition、Fault、陈旧状态继续报告上一个稳定类型。
+- Flight 对外报告 `VEHICLE_TYPE_ROTARY_WING/MAV_TYPE_QUADROTOR`，Ground 报告 `VEHICLE_TYPE_ROVER/MAV_TYPE_GROUND_ROVER`；参数运行时关闭会立即清除飞行汽车解锁锁定并恢复原生 `MAV_TYPE` 推导。
+- HealthAndArmingChecks 不另行订阅 uORB，只接收 Commander 判定出的锁定布尔值；Commander 未包含 flying_car 模块头，也未调用任何模块 main。
+
+### TDD 与验证
+
+- RED：严格 C++17 helper 测试首先因 `FlyingCarSafety.hpp` 不存在而编译失败。
+- GREEN：`g++.exe -std=c++17 -Wall -Wextra -Werror test/flying_car_commander_safety_test.cpp` 编译运行退出码 0，覆盖普通构型零干预、缺失/陈旧/未来状态、两个过渡、Fault、稳定状态及稳定类型保持/复位。
+- `rg -n 'flying_car_switch_to_|rover_differential_main|control_allocator_main' src/modules/commander` 无命中；`git diff --check` 通过。
+- 本机没有可用 `make` 且 WSL 无 Linux 发行版，因此未运行或声称 Commander 原生 GoogleTest、SITL 或 FMUv6X 构建通过；这些验证保留到 Task 9 的受支持 Linux PX4 环境。

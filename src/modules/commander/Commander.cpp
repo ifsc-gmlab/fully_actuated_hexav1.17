@@ -1743,6 +1743,14 @@ void Commander::updateParameters()
 		_vehicle_status.system_type = value_int32;
 	}
 
+	const bool flying_car_enabled = _param_sys_fc_type.get() == 1;
+
+	if (flying_car_enabled != _flying_car_enabled) {
+		_flying_car_enabled = flying_car_enabled;
+		_flying_car_status_received = false;
+		_flying_car_safety.reset();
+	}
+
 	_auto_disarm_killed.set_hysteresis_time_from(false, _param_com_kill_disarm.get() * 1_s);
 
 	const bool is_rotary = is_rotary_wing(_vehicle_status) || (is_vtol(_vehicle_status)
@@ -1765,11 +1773,56 @@ void Commander::updateParameters()
 	_vehicle_status.is_vtol = is_vtol(_vehicle_status);
 	_vehicle_status.is_vtol_tailsitter = is_vtol_tailsitter(_vehicle_status);
 
+	if (_flying_car_enabled) {
+		_vehicle_status.vehicle_type = vehicle_status_s::VEHICLE_TYPE_ROTARY_WING;
+		_vehicle_status.system_type = MAV_TYPE_QUADROTOR;
+	}
+
 	// _mode_switch_mapped = (RC_MAP_FLTMODE > 0)
 	if (_param_rc_map_fltmode != PARAM_INVALID && (param_get(_param_rc_map_fltmode, &value_int32) == PX4_OK)) {
 		_mode_switch_mapped = (value_int32 > 0);
 	}
 
+}
+
+void Commander::flyingCarStatusUpdate()
+{
+	if (!_flying_car_enabled) {
+		_health_and_arming_checks.setFlyingCarArmingLocked(false);
+		return;
+	}
+
+	if (_flying_car_status_sub.update(&_flying_car_status)) {
+		_flying_car_status_received = true;
+	}
+
+	static_assert(flying_car_status_s::MODE_FLIGHT == static_cast<uint8_t>(FlyingCarSafety::Mode::Flight));
+	static_assert(flying_car_status_s::MODE_TRANSITION_TO_GROUND ==
+		      static_cast<uint8_t>(FlyingCarSafety::Mode::TransitionToGround));
+	static_assert(flying_car_status_s::MODE_GROUND == static_cast<uint8_t>(FlyingCarSafety::Mode::Ground));
+	static_assert(flying_car_status_s::MODE_TRANSITION_TO_FLIGHT ==
+		      static_cast<uint8_t>(FlyingCarSafety::Mode::TransitionToFlight));
+	static_assert(flying_car_status_s::MODE_FAULT == static_cast<uint8_t>(FlyingCarSafety::Mode::Fault));
+
+	const auto mode = static_cast<FlyingCarSafety::Mode>(_flying_car_status.mode);
+	const auto result = FlyingCarSafety::evaluate(true, _flying_car_status_received, hrt_absolute_time(),
+			    _flying_car_status.timestamp, mode);
+	_health_and_arming_checks.setFlyingCarArmingLocked(result.arming_locked);
+
+	if (result.status_fresh) {
+		_flying_car_safety.acceptStableMode(mode);
+	}
+
+	const bool ground = _flying_car_safety.stableType() == FlyingCarSafety::StableType::Ground;
+	const uint8_t vehicle_type = ground ? vehicle_status_s::VEHICLE_TYPE_ROVER :
+				     vehicle_status_s::VEHICLE_TYPE_ROTARY_WING;
+	const uint8_t system_type = ground ? MAV_TYPE_GROUND_ROVER : MAV_TYPE_QUADROTOR;
+
+	if (_vehicle_status.vehicle_type != vehicle_type || _vehicle_status.system_type != system_type) {
+		_vehicle_status.vehicle_type = vehicle_type;
+		_vehicle_status.system_type = system_type;
+		_status_changed = true;
+	}
 }
 
 void Commander::run()
@@ -1822,6 +1875,8 @@ void Commander::run()
 
 			_status_changed = true;
 		}
+
+		flyingCarStatusUpdate();
 
 		handlePowerButtonState();
 

@@ -100,6 +100,7 @@ public:
 	 * Whether switching into a given navigation mode is possible
 	 */
 	bool canRun(uint8_t nav_state) const { return _reporter.canRun(nav_state); }
+	void setFlyingCarArmingLocked(bool locked) { _context.setFlyingCarArmingLocked(locked); }
 
 	/**
 	 * Query the mode requirements: check if a mode prevents arming

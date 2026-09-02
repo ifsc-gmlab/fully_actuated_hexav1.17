@@ -34,6 +34,7 @@
 #include <gtest/gtest.h>
 
 #include "Common.hpp"
+#include "../FlyingCarSafety.hpp"
 #include <uORB/topics/event.h>
 #include <uORB/Subscription.hpp>
 
@@ -59,6 +60,28 @@ public:
 	}
 
 };
+
+TEST(FlyingCarSafetyTest, ArmingAndStableTypeIsolation)
+{
+	constexpr uint64_t now = 2'000'000;
+	using Safety = FlyingCarSafety;
+
+	EXPECT_FALSE(Safety::evaluate(false, false, now, 0, Safety::Mode::Fault).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, false, now, 0, Safety::Mode::Flight).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, true, now, now - 1'000'001, Safety::Mode::Flight).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, true, now, now + 1, Safety::Mode::Ground).arming_locked);
+	EXPECT_FALSE(Safety::evaluate(true, true, now, now, Safety::Mode::Flight).arming_locked);
+	EXPECT_FALSE(Safety::evaluate(true, true, now, now, Safety::Mode::Ground).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToGround).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::TransitionToFlight).arming_locked);
+	EXPECT_TRUE(Safety::evaluate(true, true, now, now, Safety::Mode::Fault).arming_locked);
+
+	Safety tracker;
+	EXPECT_EQ(tracker.stableType(), Safety::StableType::Flight);
+	tracker.acceptStableMode(Safety::Mode::Ground);
+	tracker.acceptStableMode(Safety::Mode::Fault);
+	EXPECT_EQ(tracker.stableType(), Safety::StableType::Ground);
+}
 
 
 TEST_F(ReporterTest, basic_no_checks)
