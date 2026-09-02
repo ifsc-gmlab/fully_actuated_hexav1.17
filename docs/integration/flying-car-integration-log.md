@@ -172,3 +172,28 @@
 
 - 仍需在 Linux PX4 环境运行注册的 GoogleTest 和完整 PX4 回归。
 - 已知的 `uint64_t` 时间回绕属于轻微后续项，本次按审查裁定保持不变。
+
+## 2026-09-02：隔离飞行汽车车轮混控与执行器门控
+
+### 修改文件
+
+- `src/modules/flying_car/FlyingCarDifferentialControl.hpp/.cpp`：新增无状态差速混控；按 `throttle - yaw` 和 `throttle + yaw` 生成左右轮输出，限制输出幅度、处理左右独立反向，并将所有无效输入归零。
+- `src/modules/flying_car/FlyingCarDifferentialControlTest.cpp`：覆盖直行前进/后退、双向转弯、原地转向、独立/同时反向、正负饱和、无效输入和零/负/超范围限制。
+- `src/modules/flying_car/FlyingCarActuatorGate.hpp/.cpp`：新增不依赖生成 uORB 的纯值门控；构型关闭时只报告旁路，Flight、Ground、过渡、Fault 和非法状态分别生成规定的安全输出和可逆标志。
+- `src/modules/flying_car/FlyingCarActuatorGateTest.cpp`：覆盖旁路、飞行旋翼透传、非有限旋翼禁用、地面车轮限制/无效值归零、过渡/Fault/非法状态安全输出以及精确可逆位 `48`。
+- `src/modules/flying_car/CMakeLists.txt`：注册两个纯库及两个 `px4_add_unit_gtest` 测试。
+
+### 验证
+
+- RED 命令：`D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. -Isrc/lib .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-4-harness.cpp -o .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-4-harness.exe`。
+- RED 结果：产品文件创建前编译失败，首个错误为 `FlyingCarActuatorGate.hpp: No such file or directory`，证明独立测试能捕获缺失接口。
+- GREEN 命令：`D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I.superpowers/sdd/2026-09-01-flying-car-isolated-integration/stubs -I. -Isrc/lib .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-4-harness.cpp src/modules/flying_car/FlyingCarDifferentialControl.cpp src/modules/flying_car/FlyingCarActuatorGate.cpp -o .superpowers/sdd/2026-09-01-flying-car-isolated-integration/task-4-harness.exe`，随后运行该程序。
+- GREEN 结果：`Task 4 harness: 87 checks, 0 failures`。
+- GoogleTest 语法检查：分别对 `FlyingCarDifferentialControlTest.cpp` 和 `FlyingCarActuatorGateTest.cpp` 使用相同严格 C++17 标志、忽略的本地 GoogleTest/PX4 平台桩和 `-fsyntax-only`；结果均为退出码 `0`。
+- 隔离检查：`git diff -- src/modules/rover_differential src/modules/control_allocator` 输出为空；禁止依赖扫描未发现 uORB、参数、时钟、模块、动态分配或 PX4 运行时调用。
+
+### 风险与后续
+
+- `wsl.exe -l -q` 返回退出码 `1` 并提示安装 WSL；本机没有 Linux/PX4 构建环境，因此未运行或声称完整 PX4 CMake 构建和真实 GoogleTest 执行通过。
+- 后续运行模块必须在 `bypass=true` 时保留原始执行器发布而不发布门控返回值，并将纯门控结果显式复制到生成的 `actuator_motors_s`。
+- AUX1–4 DShot 与 AUX5–6 可逆 PWM 的混合定时器能力仍需 Linux 固件构建和无桨硬件台架验证。

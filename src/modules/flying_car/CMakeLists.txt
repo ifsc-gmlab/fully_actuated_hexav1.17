@@ -30,3 +30,24 @@ px4_add_unit_gtest(
 	SRC FlyingCarModeManagerTest.cpp
 	LINKLIBS flying_car_mode_manager
 )
+
+px4_add_library(flying_car_differential_control
+	FlyingCarDifferentialControl.cpp
+	FlyingCarDifferentialControl.hpp
+)
+
+px4_add_unit_gtest(
+	SRC FlyingCarDifferentialControlTest.cpp
+	LINKLIBS flying_car_differential_control
+)
+
+px4_add_library(flying_car_actuator_gate
+	FlyingCarActuatorGate.cpp
+	FlyingCarActuatorGate.hpp
+	FlyingCarTypes.hpp
+)
+
+px4_add_unit_gtest(
+	SRC FlyingCarActuatorGateTest.cpp
+	LINKLIBS flying_car_actuator_gate
+)
