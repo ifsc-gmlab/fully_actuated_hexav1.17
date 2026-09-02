@@ -34,6 +34,7 @@
 #include <gtest/gtest.h>
 
 #include "Common.hpp"
+#include "checks/systemCheck.hpp"
 #include "../FlyingCarSafety.hpp"
 #include <uORB/topics/event.h>
 #include <uORB/Subscription.hpp>
