@@ -36,6 +36,7 @@
 
 #include <parameters/param.h>
 #include <uORB/topics/actuator_motors.h>
+#include <uORB/topics/flying_car_actuator_motors.h>
 #include <uORB/topics/actuator_servos.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_test.h>
@@ -126,6 +127,21 @@ public:
 		_actuator_motors_pub.publish(actuator_motors);
 	}
 
+	void sendFlyingCarMotors(const std::array<float, actuator_motors_s::NUM_CONTROLS> &motors,
+			uint16_t reversible = 0)
+	{
+		flying_car_actuator_motors_s actuator_motors{};
+		actuator_motors.timestamp = hrt_absolute_time();
+		actuator_motors.timestamp_sample = actuator_motors.timestamp;
+		actuator_motors.reversible_flags = reversible;
+
+		for (unsigned i = 0; i < motors.size(); ++i) {
+			actuator_motors.control[i] = motors[i];
+		}
+
+		_flying_car_actuator_motors_pub.publish(actuator_motors);
+	}
+
 	void sendServos(const std::array<float, actuator_servos_s::NUM_CONTROLS> &servos)
 	{
 		actuator_servos_s actuator_servos{};
@@ -177,6 +193,7 @@ public:
 private:
 	uORB::Publication<actuator_test_s> _actuator_test_pub{ORB_ID(actuator_test)};
 	uORB::Publication<actuator_motors_s> _actuator_motors_pub{ORB_ID(actuator_motors)};
+	uORB::Publication<flying_car_actuator_motors_s> _flying_car_actuator_motors_pub{ORB_ID(flying_car_actuator_motors)};
 	uORB::Publication<actuator_servos_s> _actuator_servos_pub{ORB_ID(actuator_servos)};
 	uORB::Publication<actuator_armed_s> _actuator_armed_pub{ORB_ID(actuator_armed)};
 };
@@ -536,4 +553,55 @@ TEST_F(MixerModuleTest, OutputLimitCalcSingle)
 	EXPECT_EQ(mixing_output.output_limit_calc_single(0, 0.025), 10); // Rounding down
 	EXPECT_EQ(mixing_output.output_limit_calc_single(0, 0.075), 9); // Rounding up
 	EXPECT_EQ(mixing_output.output_limit_calc_single(0, 0.1), 9); // Exact value
+}
+
+TEST_F(MixerModuleTest, dedicatedFlyingCarMotorSourceLatchesAfterSafeSample)
+{
+	OutputModuleTest test_module;
+	test_module.configureFunctions({
+		(int)OutputFunction::Motor1,
+		(int)OutputFunction::Motor2,
+		(int)OutputFunction::Motor3,
+		(int)OutputFunction::Motor4,
+		(int)OutputFunction::Motor5,
+		(int)OutputFunction::Motor6});
+	MixingOutput mixing_output{PARAM_PREFIX, MAX_NUM_OUTPUTS, test_module, MixingOutput::SchedulingPolicy::Disabled, false, false};
+	mixing_output.setAllDisarmedValues(DISARMED_VALUE);
+	mixing_output.setAllFailsafeValues(FAILSAFE_VALUE);
+	mixing_output.setAllMinValues(MIN_VALUE);
+	mixing_output.setAllCenterValues(CENTER_VALUE);
+	mixing_output.setAllMaxValues(MAX_VALUE);
+	test_module.sendActuatorArmed(true);
+
+	// Standard-only configurations retain the existing source and transformation.
+	test_module.sendMotors({0.25f, 0.5f, 0.75f, 1.f, 0.f, 0.f, NAN, NAN, NAN, NAN, NAN, NAN});
+	update(mixing_output);
+	EXPECT_EQ(test_module.outputs[0], (MAX_VALUE - MIN_VALUE) * 0.25f + MIN_VALUE);
+	EXPECT_EQ(test_module.outputs[3], MAX_VALUE);
+	EXPECT_EQ(test_module.outputs[4], MIN_VALUE);
+
+	// The runtime's first dedicated sample is safe: rotors disabled, reversible wheels neutral.
+	test_module.sendFlyingCarMotors({NAN, NAN, NAN, NAN, 0.f, 0.f, NAN, NAN, NAN, NAN, NAN, NAN},
+			(1u << 4) | (1u << 5));
+	mixing_output.update();
+	EXPECT_EQ(test_module.outputs[0], DISARMED_VALUE);
+	EXPECT_EQ(test_module.outputs[3], DISARMED_VALUE);
+	EXPECT_EQ(test_module.outputs[4], CENTER_VALUE);
+	EXPECT_EQ(test_module.outputs[5], CENTER_VALUE);
+	EXPECT_EQ(mixing_output.reversibleOutputs(), (1u << 4) | (1u << 5));
+
+	// Later dedicated samples use the same transformation, including reversible bits.
+	test_module.sendFlyingCarMotors({0.5f, NAN, NAN, NAN, -0.5f, 0.5f, NAN, NAN, NAN, NAN, NAN, NAN},
+			(1u << 4) | (1u << 5));
+	mixing_output.update();
+	EXPECT_EQ(test_module.outputs[0], (MAX_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
+	EXPECT_EQ(test_module.outputs[4], (CENTER_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
+	EXPECT_EQ(test_module.outputs[5], (MAX_VALUE - CENTER_VALUE) * 0.5f + CENTER_VALUE);
+
+	// Once latched, a later standard actuator sample must never override the gated source.
+	test_module.sendMotors({1.f, 1.f, 1.f, 1.f, 1.f, 1.f, NAN, NAN, NAN, NAN, NAN, NAN});
+	mixing_output.update();
+	EXPECT_EQ(test_module.outputs[0], (MAX_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
+	EXPECT_EQ(test_module.outputs[4], (CENTER_VALUE - MIN_VALUE) * 0.5f + MIN_VALUE);
+	EXPECT_EQ(test_module.outputs[5], (MAX_VALUE - CENTER_VALUE) * 0.5f + CENTER_VALUE);
 }

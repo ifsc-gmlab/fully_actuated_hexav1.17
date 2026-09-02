@@ -51,3 +51,17 @@ px4_add_unit_gtest(
 	SRC FlyingCarActuatorGateTest.cpp
 	LINKLIBS flying_car_actuator_gate
 )
+
+px4_add_module(
+	MODULE modules__flying_car
+	MAIN flying_car
+	SRCS
+		FlyingCar.cpp
+		FlyingCar.hpp
+	MODULE_CONFIG
+		module.yaml
+	DEPENDS
+		flying_car_mode_manager
+		flying_car_differential_control
+		flying_car_actuator_gate
+)

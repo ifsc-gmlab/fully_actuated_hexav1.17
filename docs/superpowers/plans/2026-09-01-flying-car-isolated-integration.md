@@ -329,16 +329,20 @@ git commit -m "feat: isolate flying car wheel actuation"
 ### Task 5: Build the Runtime Flying-Car Module
 
 **Files:**
+- Create: `msg/FlyingCarActuatorMotors.msg`
+- Modify: `msg/CMakeLists.txt`
 - Create: `src/modules/flying_car/FlyingCar.hpp`
 - Create: `src/modules/flying_car/FlyingCar.cpp`
 - Modify: `src/modules/flying_car/CMakeLists.txt`
 - Modify: `src/modules/flying_car/Kconfig`
+- Modify: `src/lib/mixer_module/functions/FunctionMotors.hpp`
+- Modify: `src/lib/mixer_module/mixer_module_tests.cpp`
 - Modify: `boards/px4/fmu-v6x/default.px4board`
 - Modify: `docs/integration/flying-car-integration-log.md`
 
 **Interfaces:**
 - Consumes: `vehicle_status`, `vehicle_land_detected`, `vehicle_local_position`, `manual_control_setpoint`, `rover_throttle_setpoint`, `rover_steering_setpoint`, and parameters.
-- Produces: `flying_car_status` and the gated `actuator_motors` instance used by output drivers for airframe `80003`.
+- Produces: `flying_car_status` and `flying_car_actuator_motors`; Motor output providers lock to the dedicated gated topic after its first sample, while configurations that never publish it retain original `actuator_motors` behavior.
 
 - [ ] **Step 1: Add a module-start isolation test**
 
@@ -346,7 +350,7 @@ Start with `SYS_FC_TYPE=0` and assert the command returns a clear refusal withou
 
 - [ ] **Step 2: Implement module startup and subscriptions**
 
-The start path must check `SYS_FC_TYPE` before scheduling work. It must not start/stop Commander, control allocator, flight mode manager, land detector, or generic rover modules.
+The start path must check `SYS_FC_TYPE` before scheduling work. It must not start/stop Commander, control allocator, flight mode manager, land detector, or generic rover modules. It must publish a safe gated output before reporting ready.
 
 - [ ] **Step 3: Translate RC input into explicit requests**
 
@@ -354,7 +358,7 @@ Use `FC_MODE_CH` to select an RC auxiliary function and apply hysteresis: values
 
 - [ ] **Step 4: Publish status and gate actuator ownership**
 
-Publish status on every state change and at 2 Hz while stable. During transition or fault, publish no active rotor values and neutral wheel values.
+Publish status on every state change and at 2 Hz while stable. Publish gated actuator output at 100 Hz and on new allocator data. During transition or fault, publish no active rotor values and neutral wheel values.
 
 - [ ] **Step 5: Add FMUv6X build selection**
 

@@ -16,10 +16,10 @@ parameters:
       FC_MODE_CH:
         description:
           short: Flying-car mode switch RC channel
-          long: RC channel used to request a flying-car mode switch. Set to 0 to disable RC switching.
+          long: RC AUX1 through AUX6 used to request a flying-car mode switch. Set to 0 to disable RC switching.
         type: int32
         min: 0
-        max: 18
+        max: 6
         default: 0
 
       FC_BOOT_MODE:

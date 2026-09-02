@@ -197,3 +197,30 @@
 - `wsl.exe -l -q` 返回退出码 `1` 并提示安装 WSL；本机没有 Linux/PX4 构建环境，因此未运行或声称完整 PX4 CMake 构建和真实 GoogleTest 执行通过。
 - 后续运行模块必须在 `bypass=true` 时保留原始执行器发布而不发布门控返回值，并将纯门控结果显式复制到生成的 `actuator_motors_s`。
 - AUX1–4 DShot 与 AUX5–6 可逆 PWM 的混合定时器能力仍需 Linux 固件构建和无桨硬件台架验证。
+
+## 2026-09-02：运行时模块与专用物理电机输出路径
+
+### 修改文件
+
+- `msg/FlyingCarActuatorMotors.msg` 与 `msg/CMakeLists.txt`：注册只供物理电机输出层消费的 12 路门控消息；它不是控制器设定值。
+- `src/modules/flying_car/FlyingCar.hpp/.cpp`：新增 100 Hz `ModuleBase`/`ModuleParams`/`ScheduledWorkItem` 运行时，按原生电机新样本额外调度；启动前检查 `SYS_FC_TYPE=1`，先发布一次安全专用样本，再发布状态。
+- 运行时对原生旋翼输入采用 200 ms 新鲜度上限，对两个 Rover 设定值采用 500 ms 上限，过渡超时固定为 5 s；无效水平速度按无穷大处理。
+- RC 仅接受有效且来源为 RC 的 `AUX1..AUX6`；小于 `-0.5` 请求 Flight，大于 `0.5` 请求 Ground，中间区间保持原请求。
+- `src/lib/mixer_module/functions/FunctionMotors.hpp`：保留原 `actuator_motors` 回调和转换，首个 `flying_car_actuator_motors` 样本到达后锁存专用源，后续原生样本不再覆盖。
+- `src/lib/mixer_module/mixer_module_tests.cpp`：增加真实 PX4 功能测试，覆盖原生源、首个安全专用样本接管、后续原生样本不可覆盖、专用可逆位和安全轮中立值；本机未运行该 PX4 测试。
+- `boards/px4/fmu-v6x/default.px4board`：仅为 FMUv6X 选择 `CONFIG_MODULES_FLYING_CAR=y` 和 `CONFIG_MODULES_ROVER_DIFFERENTIAL=y`。
+- 保留并纳入本任务提交前已存在的设计/计划修订：专用主题隔离、禁止同实例自重发以及 `FunctionMotors` 锁存契约。
+
+### TDD 与验证
+
+- RED：严格 C++17 helper harness 在 `FlyingCar.hpp` 尚不存在时编译失败；增加启动门测试后又以 `configurationAllowsStart` 不存在按预期失败。
+- GREEN：同一 helper harness 以 `-std=c++17 -Wall -Wextra -Werror -pedantic` 编译并运行通过，覆盖启动构型、RC 滞环、时间戳新鲜度、有限水平速度和旋翼链就绪。
+- 忽略桩语法检查：用最小 PX4/uORB/生成消息桩分别对 `FlyingCar.cpp` 和 `FunctionMotors.hpp` 执行相同严格标志的 `-fsyntax-only`，退出码均为 `0`；该结果不是原生 PX4 构建。
+- 纯回归：Task 3 状态机 harness `65 checks` 全部通过；Task 4 差速与门控 harness `87 checks, 0 failures`。
+- 结构检查：消息字段与注册、模块 CMake/Kconfig/YAML、FMUv6X 标志、专用发布、禁止模块 main 调用、禁止 `PublicationMulti`/原生电机发布、通用控制器无 diff 均通过；`git diff --check` 单独在提交前执行。
+- 构建限制：`Get-Command make` 返回不可用，因此没有运行或声称 `make px4_sitl_default`、`make px4_fmu-v6x_default` 以及真实 `mixer_module_tests` 通过。
+
+### 风险与后续
+
+- 必须在 Linux PX4 环境生成 uORB/参数头并完成 SITL、FMUv6X 和 `mixer_module_tests` 原生编译运行。
+- AUX1–4 DShot600 与 AUX5–6 50 Hz 可逆 PWM 的硬件定时器分组、首个专用样本接管和失效安全值仍需无桨台架确认。

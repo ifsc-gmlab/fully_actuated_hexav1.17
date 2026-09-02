@@ -43,6 +43,8 @@
 - `FlyingCarDifferentialControl`：仅为 `80003` 生成 Motor5–6 差速输出；
 - `FlyingCarActuatorGate`：保证飞行旋翼与车轮输出互斥。
 
+运行时不能订阅后重发同一个 `actuator_motors` 实例，否则会形成自反馈，也不能依赖 `PublicationMulti` 获得固定实例。因此增加专用 `flying_car_actuator_motors` uORB 主题：`flying_car` 订阅原生 `actuator_motors` 和车轮设定值，经门控后发布专用主题；`FunctionMotors` 在收到首个专用主题样本后锁定该输入直到重启。普通构型从不发布专用主题，继续使用原生输入，行为不变。
+
 以下模块不应包含飞行汽车专用执行器索引：
 
 - 原生多旋翼位置、姿态和速率控制器；
@@ -69,6 +71,8 @@ flight_mode_manager
 
 飞行形态下 Motor5–6 必须处于可逆 ESC 的中立停止值。
 
+原生控制分配器仍发布 Motor1–4 到 `actuator_motors`。飞行汽车模块将其门控为专用输出主题，物理输出层只消费门控后的样本。
+
 ### 5.2 地面形态
 
 地面部分使用飞行汽车专用差速控制：
@@ -81,6 +85,8 @@ flight_mode_manager
 ```
 
 地面形态下 Motor1–4 必须停转。普通 Rover 的 Motor1–2 输出不受影响。
+
+飞行汽车专用差速控制不修改通用 `rover_differential`，而是直接订阅 `rover_throttle_setpoint` 和 `rover_steering_setpoint`，产生 Motor5–6。
 
 ### 5.3 物理输出
 
@@ -211,4 +217,3 @@ SITL 必须实际驱动四个旋翼和两个轮子，而不是只修改 `MAV_TYP
 - 与当前指定 Pixhawk 6C/6X 无关的新飞控板适配。
 
 这些能力只有在首版输出隔离和故障处理完成实机验证后才能单独设计。
-

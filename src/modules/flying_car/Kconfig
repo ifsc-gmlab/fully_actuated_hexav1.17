@@ -1,6 +1,6 @@
 menuconfig MODULES_FLYING_CAR
-	bool "Flying-car safety primitives"
+	bool "Flying-car runtime and isolated motor gate"
 	default n
 	---help---
-		Enable the isolated flying-car safety state machine and its pure support library.
-		The runtime flying_car module is added by a later integration task.
+		Enable the flying_car runtime module, its safety state machine, differential
+		wheel mixing, and dedicated gated physical-motor output path.

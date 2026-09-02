@@ -36,6 +36,7 @@
 #include "FunctionProviderBase.hpp"
 
 #include <uORB/topics/actuator_motors.h>
+#include <uORB/topics/flying_car_actuator_motors.h>
 
 /**
  * Functions: Motor1 ... MotorMax
@@ -50,6 +51,7 @@ public:
 
 	FunctionMotors(const Context &context) :
 		_topic(&context.work_item, ORB_ID(actuator_motors)),
+		_flying_car_topic(&context.work_item, ORB_ID(flying_car_actuator_motors)),
 		_thrust_factor(context.thrust_factor)
 	{
 		for (int i = 0; i < actuator_motors_s::NUM_CONTROLS; ++i) {
@@ -57,11 +59,33 @@ public:
 		}
 	}
 
+	~FunctionMotors() override
+	{
+		if (_flying_car_callback_registered) {
+			_flying_car_topic.unregisterCallback();
+		}
+	}
+
 	static FunctionProviderBase *allocate(const Context &context) { return new FunctionMotors(context); }
 
 	void update() override
 	{
-		if (_topic.update(&_data)) {
+		flying_car_actuator_motors_s flying_car_data{};
+
+		// The dedicated gated source wins the first time it appears and remains selected until reboot.
+		if (_flying_car_topic.update(&flying_car_data)) {
+			_flying_car_source_latched = true;
+			_data.timestamp = flying_car_data.timestamp;
+			_data.timestamp_sample = flying_car_data.timestamp_sample;
+			_data.reversible_flags = flying_car_data.reversible_flags;
+
+			for (int i = 0; i < actuator_motors_s::NUM_CONTROLS; ++i) {
+				_data.control[i] = flying_car_data.control[i];
+			}
+
+			updateValues(_data.reversible_flags, _thrust_factor, _data.control, actuator_motors_s::NUM_CONTROLS);
+
+		} else if (!_flying_car_source_latched && _topic.update(&_data)) {
 			updateValues(_data.reversible_flags, _thrust_factor, _data.control, actuator_motors_s::NUM_CONTROLS);
 		}
 	}
@@ -74,7 +98,16 @@ public:
 	bool allowPrearmControl() const override { return false; }
 #endif
 
-	uORB::SubscriptionCallbackWorkItem *subscriptionCallback() override { return &_topic; }
+	uORB::SubscriptionCallbackWorkItem *subscriptionCallback() override
+	{
+		// Keep the standard callback as the provider callback so ordinary configurations behave exactly as before.
+		// Register the dormant dedicated callback as well so its first sample can schedule the same work item.
+		if (!_flying_car_callback_registered) {
+			_flying_car_callback_registered = _flying_car_topic.registerCallback();
+		}
+
+		return &_topic;
+	}
 
 	bool getLatestSampleTimestamp(hrt_abstime &t) const override { t = _data.timestamp_sample; return t != 0; }
 
@@ -123,6 +156,9 @@ public:
 
 private:
 	uORB::SubscriptionCallbackWorkItem _topic;
+	uORB::SubscriptionCallbackWorkItem _flying_car_topic;
 	actuator_motors_s _data{};
+	bool _flying_car_source_latched{false};
+	bool _flying_car_callback_registered{false};
 	const float &_thrust_factor;
 };
