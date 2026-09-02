@@ -86,6 +86,31 @@ TEST(FlyingCarSafetyTest, ArmingAndStableTypeIsolation)
 	EXPECT_EQ(tracker.stableType(), Safety::StableType::Ground);
 }
 
+TEST(FlyingCarSafetyTest, SystemCheckActuallyDeniesArming)
+{
+	vehicle_status_s status{};
+	status.arming_state = vehicle_status_s::ARMING_STATE_DISARMED;
+	status.vehicle_type = vehicle_status_s::VEHICLE_TYPE_ROTARY_WING;
+	Context context{status};
+	failsafe_flags_s failsafe_flags{};
+	Report reporter{failsafe_flags, 0_s};
+	SystemChecks system_checks;
+
+	context.setFlyingCarArmingLocked(true); // SYS_FC_TYPE=1, unsafe status derived by Commander
+	reporter.reset();
+	reporter.prepare(status.vehicle_type);
+	system_checks.checkAndReport(context, reporter);
+	reporter.finalize();
+	EXPECT_FALSE(reporter.canArm(vehicle_status_s::NAVIGATION_STATE_MANUAL));
+
+	context.setFlyingCarArmingLocked(false); // native configuration or fresh stable flying-car status
+	reporter.reset();
+	reporter.prepare(status.vehicle_type);
+	system_checks.checkAndReport(context, reporter);
+	reporter.finalize();
+	EXPECT_TRUE(reporter.canArm(vehicle_status_s::NAVIGATION_STATE_MANUAL));
+}
+
 
 TEST_F(ReporterTest, basic_no_checks)
 {

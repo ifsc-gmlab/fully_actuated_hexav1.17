@@ -278,3 +278,9 @@
 - 复审发现 `arm()` 的 RC 五秒重解锁宽限和 `run_preflight_checks=false` 路径会跳过 SystemChecks。现已在宽限与可选预检分支之前增加独立、无条件的飞行汽车入口门。
 - `SYS_FC_TYPE=1` 时，Commander 从构造/参数启用起默认保持入口锁定；只有同一循环中处理到新鲜稳定状态后才允许任何来源进入解锁。SystemChecks 原诊断继续保留，但不再是安全门的唯一执行点。
 - 新增 RED/GREEN 用例固定入口真值表：普通构型旁路，飞行汽车仅在锁定为 false 时允许；严格 helper 编译运行退出码 0。
+
+### Task 7 复审测试补强
+
+- 在原生 `HealthAndArmingChecksTest.cpp` 增加 `SystemChecks + Context + Reporter` 集成测试：飞行汽车锁定布尔为 true 时最终 `canArm()` 为 false，普通构型/稳定状态传入 false 时不产生该拒绝。
+- 增加可执行 Commander 源码结构回归，明确要求飞行汽车入口门位于 `run_preflight_checks=false` 的 RC 宽限改写和 `if (run_preflight_checks)` 之前，并用故意把门放到末尾的样例证明检查器会拒绝 `arm(false)` 绕过结构。
+- 结构测试初次因检查模块不存在而 RED；实现后 `python -m unittest discover -s test -p 'test_flying_car_commander_arm_gate.py' -v` 运行 2 项全部通过。真实 PX4 GoogleTest 源已保留，但本机缺少生成头与 Linux 构建工具链，未声称原生执行通过。
