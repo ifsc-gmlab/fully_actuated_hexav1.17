@@ -312,3 +312,12 @@
 - 三个模型文件迁移到主仓自有 `Tools/simulation/gz_custom_models/flying_car`，索引和工作树中的 `Tools/simulation/gz` 均保持空缺，`.gitmodules` 完全不变。
 - `gz_env.sh.in` 导出 `PX4_GZ_CUSTOM_MODELS` 并将其追加到 `GZ_SIM_RESOURCE_PATH`。`px4-rc.gzsim` 默认模型根仍是原 `${PX4_GZ_MODELS}`，只有解析出的 `MODEL_NAME=flying_car` 使用自有模型根，因此标准模型和外部子模块语义不变。
 - 新增所有权/解析回归先在旧索引布局上 RED，明确列出三个 `Tools/simulation/gz/...` blob；暂存迁移后要求 `git ls-files --stage Tools/simulation/gz` 为空并 GREEN。最终模型结构与启动解析测试共 10 项通过。
+
+## 2026-09-02：Task 9 回归与硬件构建门
+
+- 新增 `docs/integration/flying-car-validation-report.md`，记录被验证提交、基线、时间、精确命令类别、退出状态、四构型隔离矩阵及未解除的硬件门。
+- MSYS2 g++ 14.2 严格重建并运行：Task 3 状态机 `65/65`、Task 4 差速/门控 `88/88`、Task 5 helper、FunctionMotors provider 和 runtime 停止安全输出均通过。
+- Python 回归通过：80003 ROMFS `6/6`、Commander 解锁门顺序 `2/2`、Gazebo 模型 `10/10`；Commander C++ helper、四个 shell 脚本语法、两个模型 XML 和 80003 机架元数据解析均通过。
+- `1810a55..HEAD` 对通用多旋翼位置/姿态/速率控制器、通用差速车和 control allocator 的差异为空；6003/6004 机架差异为空；禁止由 flying-car 代码启停既有控制模块的扫描为空。
+- 本机缺少 `make`、CMake、Ninja、ARM GCC、Gazebo，并且 WSL 没有 Linux 发行版。因此原生 GoogleTest、完整 SITL、FMUv6C 和 FMUv6X 构建均记录为 NOT RUN；没有固件产物或哈希，不声称真实 Pixhawk 6X 或实车/实机支持已经验证。
+- 后续必须完成 Linux 原生构建、SITL 六路动态验证、Pixhawk 6X AUX1–4 DShot/AUX5–6 PWM 混合协议无桨台架，以及带参数快照和 ULog 的真机分阶段测试。
