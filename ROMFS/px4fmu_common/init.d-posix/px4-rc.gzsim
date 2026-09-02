@@ -1,6 +1,12 @@
 #!/bin/sh
 # shellcheck disable=SC2154
 
+# Keep the airframe-friendly name aligned with the gz_<model> build target
+# convention. Other simulator model selections are left untouched.
+if [ "${PX4_SIM_MODEL}" = "flying_car" ]; then
+	PX4_SIM_MODEL="gz_flying_car"
+fi
+
 # Enforce minimum gz version as Harmonic (gz-sim8)
 MIN_GZ_VERSION="8.0.0"
 GZ_SIM_VERSION=$(gz sim --versions 2>/dev/null | head -n 1 | tr -d ' ')

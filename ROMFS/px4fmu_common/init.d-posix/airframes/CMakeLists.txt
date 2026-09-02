@@ -127,6 +127,6 @@ px4_add_romfs_files(
 
 if(CONFIG_MODULES_FLYING_CAR)
 	px4_add_romfs_files(
-		80003_flying_car
+	80003_gz_flying_car
 	)
 endif()

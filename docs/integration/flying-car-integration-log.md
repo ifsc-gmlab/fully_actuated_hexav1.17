@@ -284,3 +284,24 @@
 - 在原生 `HealthAndArmingChecksTest.cpp` 增加 `SystemChecks + Context + Reporter` 集成测试：飞行汽车锁定布尔为 true 时最终 `canArm()` 为 false，普通构型/稳定状态传入 false 时不产生该拒绝。
 - 增加可执行 Commander 源码结构回归，明确要求飞行汽车入口门位于 `run_preflight_checks=false` 的 RC 宽限改写和 `if (run_preflight_checks)` 之前，并用故意把门放到末尾的样例证明检查器会拒绝 `arm(false)` 绕过结构。
 - 结构测试初次因检查模块不存在而 RED；实现后 `python -m unittest discover -s test -p 'test_flying_car_commander_arm_gate.py' -v` 运行 2 项全部通过。真实 PX4 GoogleTest 源已保留，但本机缺少生成头与 Linux 构建工具链，未声称原生执行通过。
+
+## 2026-09-02：Gazebo 六执行器飞行汽车模型
+
+### 模型与映射
+
+- 拒绝参考树的 Iris 兼容替代：参考树没有 `Tools/simulation/gz/models/flying_car`，无法产生 Motor5/6 车轮动力学或验证飞行/地面输出隔离。
+- 新增自包含 `flying_car/model.sdf`：四个独立旋翼 link/joint 与 `MulticopterMotorModel` 插件、两个带碰撞和 ODE 摩擦的轮 link/joint、IMU、NavSat、磁力计和气压计。
+- ESC bridge 的四元素数组映射 Motor1–4 到模型 `motorNumber=0..3`；Wheel bridge 的两元素数组通过 `SIM_GZ_WH_FUNC1/2=105/106` 映射 Motor5/6，模型侧 `actuator_number=0/1`。两套 bridge topic 命名空间彼此独立，未修改通用仿真 bridge。
+- POSIX airframe 更名为 `80003_gz_flying_car` 以进入现有 `*_gz_*` CMake 扫描并生成 `gz_flying_car` 目标；`px4-rc.gzsim` 仅把 airframe 默认的 `flying_car` 名称规范化为 `gz_flying_car`，其他模型路径不变。
+
+### TDD 与验证
+
+- RED 1：模型缺失时运行 `python Tools/simulation/gz/models/flying_car/model_test.py`，按预期因 `model.sdf` 不存在失败。
+- GREEN 1：模型实现后六项 XML 结构契约通过；随后新增 bridge 分流和启动名测试，先因 EC5/6 错误路由及缺少规范化分支得到两项预期失败。
+- GREEN 2：修正为 ESC1–4 与 Wheel1–2 后，`Ran 8 tests ... OK`；`xml.etree.ElementTree` 分别解析 `model.config` 和 `model.sdf` 成功。
+- `git diff --check` 通过。`git status`/后续 `git ls-files` 用于确认本地基线没有该路径的 gitlink，新增模型可由主仓提交跟踪。
+
+### 限制与风险
+
+- 本机没有 Linux PX4/Gazebo Harmonic 工具链，未运行或声称 `make px4_sitl gz_flying_car`、传感器健康、两种稳定模式动力学或 armed 切换拒绝的 SITL 结果；这些属于 Task 9 的支持环境验证。
+- `.gitmodules` 仍把 `Tools/simulation/gz` 描述为外部模型仓，但本项目初始快照没有记录对应 gitlink。当前普通文件可由本仓跟踪；若未来恢复上游子模块布局，必须把本模型移植为该子模块的独立提交或建立明确的模型覆盖目录，不能直接覆盖 gitlink。

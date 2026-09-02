@@ -34,5 +34,14 @@ param set-default SIM_GZ_EC_FUNC1 101
 param set-default SIM_GZ_EC_FUNC2 102
 param set-default SIM_GZ_EC_FUNC3 103
 param set-default SIM_GZ_EC_FUNC4 104
-param set-default SIM_GZ_EC_FUNC5 105
-param set-default SIM_GZ_EC_FUNC6 106
+
+# The wheel bridge owns a compact two-channel array. These functions select
+# flying-car Motor5/Motor6 while the model-side actuator indices remain 0/1.
+param set-default SIM_GZ_WH_FUNC1 105
+param set-default SIM_GZ_WH_MIN1 80
+param set-default SIM_GZ_WH_MAX1 120
+param set-default SIM_GZ_WH_DIS1 100
+param set-default SIM_GZ_WH_FUNC2 106
+param set-default SIM_GZ_WH_MIN2 80
+param set-default SIM_GZ_WH_MAX2 120
+param set-default SIM_GZ_WH_DIS2 100

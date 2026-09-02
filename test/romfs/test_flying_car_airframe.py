@@ -8,7 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INIT_DIR = REPO_ROOT / "ROMFS" / "px4fmu_common" / "init.d"
 HW_AIRFRAME = INIT_DIR / "airframes" / "80003_flying_car"
-SITL_AIRFRAME = REPO_ROOT / "ROMFS" / "px4fmu_common" / "init.d-posix" / "airframes" / "80003_flying_car"
+SITL_AIRFRAME = REPO_ROOT / "ROMFS" / "px4fmu_common" / "init.d-posix" / "airframes" / "80003_gz_flying_car"
 
 
 def read(path: Path) -> str:
@@ -22,7 +22,7 @@ class FlyingCarAirframeTest(unittest.TestCase):
         posix_registry = read(REPO_ROOT / "ROMFS" / "px4fmu_common" / "init.d-posix" / "airframes" / "CMakeLists.txt")
 
         self.assertEqual(hardware_registry.count("80003_flying_car"), 1)
-        self.assertEqual(posix_registry.count("80003_flying_car"), 1)
+        self.assertEqual(posix_registry.count("80003_gz_flying_car"), 1)
 
     def test_sitl_build_selects_the_module_required_by_posix_80003(self):
         sitl_board = read(REPO_ROOT / "boards" / "px4" / "sitl" / "default.px4board")
