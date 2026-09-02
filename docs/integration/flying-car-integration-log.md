@@ -305,3 +305,10 @@
 
 - 本机没有 Linux PX4/Gazebo Harmonic 工具链，未运行或声称 `make px4_sitl gz_flying_car`、传感器健康、两种稳定模式动力学或 armed 切换拒绝的 SITL 结果；这些属于 Task 9 的支持环境验证。
 - `.gitmodules` 仍把 `Tools/simulation/gz` 描述为外部模型仓，但本项目初始快照没有记录对应 gitlink。当前普通文件可由本仓跟踪；若未来恢复上游子模块布局，必须把本模型移植为该子模块的独立提交或建立明确的模型覆盖目录，不能直接覆盖 gitlink。
+
+### Task 8 复审修复：模型资源所有权
+
+- 复审确认即使当前快照没有索引 gitlink，也不能把 `.gitmodules` 声明的 `Tools/simulation/gz` 子模块根变成主仓普通 tree；上一节“当前普通文件可由本仓跟踪”的方案已撤销。
+- 三个模型文件迁移到主仓自有 `Tools/simulation/gz_custom_models/flying_car`，索引和工作树中的 `Tools/simulation/gz` 均保持空缺，`.gitmodules` 完全不变。
+- `gz_env.sh.in` 导出 `PX4_GZ_CUSTOM_MODELS` 并将其追加到 `GZ_SIM_RESOURCE_PATH`。`px4-rc.gzsim` 默认模型根仍是原 `${PX4_GZ_MODELS}`，只有解析出的 `MODEL_NAME=flying_car` 使用自有模型根，因此标准模型和外部子模块语义不变。
+- 新增所有权/解析回归先在旧索引布局上 RED，明确列出三个 `Tools/simulation/gz/...` blob；暂存迁移后要求 `git ls-files --stage Tools/simulation/gz` 为空并 GREEN。最终模型结构与启动解析测试共 10 项通过。

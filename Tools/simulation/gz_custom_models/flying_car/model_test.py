@@ -2,13 +2,16 @@
 """Structural contract for the isolated six-actuator flying-car GZ model."""
 
 from pathlib import Path
+import subprocess
 import unittest
 import xml.etree.ElementTree as ET
 
 
 MODEL_PATH = Path(__file__).with_name("model.sdf")
-AIRFRAME_PATH = MODEL_PATH.parents[5] / "ROMFS/px4fmu_common/init.d-posix/airframes/80003_gz_flying_car"
-GZ_STARTUP_PATH = MODEL_PATH.parents[5] / "ROMFS/px4fmu_common/init.d-posix/px4-rc.gzsim"
+REPO_ROOT = MODEL_PATH.parents[4]
+AIRFRAME_PATH = REPO_ROOT / "ROMFS/px4fmu_common/init.d-posix/airframes/80003_gz_flying_car"
+GZ_STARTUP_PATH = REPO_ROOT / "ROMFS/px4fmu_common/init.d-posix/px4-rc.gzsim"
+GZ_ENV_PATH = REPO_ROOT / "src/modules/simulation/gz_bridge/gz_env.sh.in"
 
 
 class FlyingCarModelTest(unittest.TestCase):
@@ -88,6 +91,31 @@ class FlyingCarModelTest(unittest.TestCase):
         startup = GZ_STARTUP_PATH.read_text(encoding="utf-8")
         self.assertIn('if [ "${PX4_SIM_MODEL}" = "flying_car" ]; then', startup)
         self.assertIn('PX4_SIM_MODEL="gz_flying_car"', startup)
+
+    def test_custom_resource_root_does_not_occupy_gz_submodule_path(self):
+        gitmodules = (REPO_ROOT / ".gitmodules").read_text(encoding="utf-8")
+        self.assertIn("path = Tools/simulation/gz", gitmodules)
+        self.assertFalse((REPO_ROOT / "Tools/simulation/gz").exists())
+        self.assertEqual(REPO_ROOT / "Tools/simulation/gz_custom_models/flying_car/model.sdf",
+                         MODEL_PATH)
+
+        tracked_submodule_path = subprocess.run(
+            ["git", "ls-files", "--stage", "Tools/simulation/gz"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual("", tracked_submodule_path)
+
+    def test_environment_and_startup_resolve_the_custom_model_root(self):
+        environment = GZ_ENV_PATH.read_text(encoding="utf-8")
+        startup = GZ_STARTUP_PATH.read_text(encoding="utf-8")
+        self.assertIn("PX4_GZ_CUSTOM_MODELS=@PX4_SOURCE_DIR@/Tools/simulation/gz_custom_models", environment)
+        self.assertIn("$PX4_GZ_CUSTOM_MODELS", environment)
+        self.assertIn('PX4_GZ_MODEL_ROOT="${PX4_GZ_CUSTOM_MODELS}"', startup)
+        self.assertIn('PX4_GZ_MODEL_ROOT="${PX4_GZ_MODELS}"', startup)
+        self.assertIn('file://${PX4_GZ_MODEL_ROOT}/${MODEL_NAME}/model.sdf', startup)
 
 
 if __name__ == "__main__":
