@@ -21,6 +21,20 @@ struct FlyingCarRuntimeParameters {
 	float wheel_limit;
 };
 
+enum class FlyingCarGroundSource : uint8_t {
+	None = 0,
+	Rover,
+	ManualRc,
+};
+
+struct FlyingCarGroundInput {
+	FlyingCarGroundSource source{FlyingCarGroundSource::None};
+	bool ready{false};
+	float throttle{0.f};
+	float steering{0.f};
+	uint64_t timestamp_sample{0};
+};
+
 class FlyingCarRuntimeHelpers
 {
 public:
@@ -83,6 +97,37 @@ public:
 		return std::isfinite(throttle) && std::isfinite(steering)
 		       && isFresh(now_us, throttle_timestamp_us, kGroundInputTimeoutUs)
 		       && isFresh(now_us, steering_timestamp_us, kGroundInputTimeoutUs);
+	}
+
+	static FlyingCarGroundInput selectGroundInput(uint64_t now_us, bool configuration_enabled,
+			bool manual_ground_allowed, bool manual_valid, bool manual_from_rc,
+			uint64_t manual_timestamp_us, uint64_t manual_sample_timestamp_us,
+			float manual_throttle, float manual_steering,
+			uint64_t rover_throttle_timestamp_us, float rover_throttle,
+			uint64_t rover_steering_timestamp_us, float rover_steering)
+	{
+		if (!configuration_enabled) {
+			return {};
+		}
+
+		// Rover inputs are accepted only as a complete, fresh pair. Never combine one rover axis
+		// with one manual axis, which would make source loss produce an unintended command.
+		if (groundChainReady(now_us, rover_throttle_timestamp_us, rover_throttle,
+				rover_steering_timestamp_us, rover_steering)) {
+			return {FlyingCarGroundSource::Rover, true, rover_throttle, rover_steering,
+				rover_throttle_timestamp_us < rover_steering_timestamp_us
+				? rover_throttle_timestamp_us : rover_steering_timestamp_us};
+		}
+
+		if (manual_ground_allowed && manual_valid && manual_from_rc
+		    && std::isfinite(manual_throttle) && std::isfinite(manual_steering)
+		    && isFresh(now_us, manual_timestamp_us, kGroundInputTimeoutUs)
+		    && isFresh(now_us, manual_sample_timestamp_us, kGroundInputTimeoutUs)) {
+			return {FlyingCarGroundSource::ManualRc, true, manual_throttle, manual_steering,
+				manual_sample_timestamp_us};
+		}
+
+		return {};
 	}
 
 	static FlyingCarRuntimeParameters sanitizeParameters(float maximum_speed_m_s, float transition_delay_s,
@@ -178,7 +223,7 @@ private:
 	void updateSubscriptions();
 	void refreshParameters();
 	void publishActuators(const FlyingCarTransitionResult &transition, bool flight_chain_ready,
-			bool ground_chain_ready, uint64_t now_us);
+			const FlyingCarGroundInput &ground_input, uint64_t now_us);
 	void publishInitialSafeOutput(uint64_t now_us);
 	void publishStatus(const FlyingCarTransitionResult &transition, bool flight_chain_ready,
 			bool ground_chain_ready, uint64_t now_us, bool force = false);

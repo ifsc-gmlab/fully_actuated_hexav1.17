@@ -88,6 +88,12 @@ Invoke-Checked 'Task 7 Commander helper strict C++ test' {
     if ($LASTEXITCODE -eq 0) { & $commanderTest }
 }
 
+$groundInputTest = Join-Path $tempRoot 'flying-car-ground-input-test.exe'
+Invoke-Checked 'Flying-car ground input strict C++ test' {
+    & $gpp.Source -std=c++17 -Wall -Wextra -Werror -pedantic -I. test/flying_car_ground_input_test.cpp -o $groundInputTest
+    if ($LASTEXITCODE -eq 0) { & $groundInputTest }
+}
+
 Invoke-Checked 'baseline revision exists' { & git cat-file -e "$Baseline^{commit}" }
 $genericDiff = & git diff --name-only "$Baseline..HEAD" -- src/modules/mc_pos_control src/modules/mc_att_control src/modules/mc_rate_control src/modules/rover_differential src/modules/control_allocator
 Assert-True ($LASTEXITCODE -eq 0) 'Generic-controller diff command failed'

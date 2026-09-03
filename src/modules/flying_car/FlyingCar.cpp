@@ -102,13 +102,19 @@ void FlyingCar::Run()
 
 	const bool flight_chain_ready = FlyingCarRuntimeHelpers::flightChainReady(
 		now_us, _actuator_motors.timestamp, _actuator_motors.timestamp_sample, rotor_controls);
-	const bool ground_chain_ready = FlyingCarRuntimeHelpers::groundChainReady(
-		now_us, _throttle_setpoint.timestamp, _throttle_setpoint.throttle_body_x,
+	const bool configuration_enabled = _param_sys_fc_type.get() == 1;
+	const FlyingCarGroundInput ground_input = FlyingCarRuntimeHelpers::selectGroundInput(
+		now_us, configuration_enabled, _requested_mode == FlyingCarMode::Ground,
+		_manual_control.valid, _manual_control.data_source == manual_control_setpoint_s::SOURCE_RC,
+		_manual_control.timestamp, _manual_control.timestamp_sample,
+		_manual_control.throttle, _manual_control.roll,
+		_throttle_setpoint.timestamp, _throttle_setpoint.throttle_body_x,
 		_steering_setpoint.timestamp, _steering_setpoint.normalized_steering_setpoint);
+	const bool ground_chain_ready = ground_input.ready;
 	const bool armed = _vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED;
 
 	const FlyingCarTransitionInput input{
-		_param_sys_fc_type.get() == 1,
+		configuration_enabled,
 		armed,
 		_land_detected.landed,
 		flight_chain_ready,
@@ -121,7 +127,7 @@ void FlyingCar::Run()
 		input, _runtime_parameters.maximum_speed_m_s, _runtime_parameters.transition_delay_us,
 		FlyingCarRuntimeHelpers::kTransitionTimeoutUs);
 
-	publishActuators(transition, flight_chain_ready, ground_chain_ready, now_us);
+	publishActuators(transition, flight_chain_ready, ground_input, now_us);
 	publishStatus(transition, flight_chain_ready, ground_chain_ready, now_us);
 }
 
@@ -142,7 +148,7 @@ void FlyingCar::publishInitialSafeOutput(uint64_t now_us)
 }
 
 void FlyingCar::publishActuators(const FlyingCarTransitionResult &transition, bool flight_chain_ready,
-		bool ground_chain_ready, uint64_t now_us)
+		const FlyingCarGroundInput &ground_input, uint64_t now_us)
 {
 	std::array<float, 4> rotor_controls{NAN, NAN, NAN, NAN};
 
@@ -153,10 +159,10 @@ void FlyingCar::publishActuators(const FlyingCarTransitionResult &transition, bo
 	matrix::Vector2f wheel_controls{0.f, 0.f};
 	const bool armed = _vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED;
 
-	if (transition.mode == FlyingCarMode::Ground && armed && ground_chain_ready) {
+	if (transition.mode == FlyingCarMode::Ground && armed && ground_input.ready) {
 		wheel_controls = FlyingCarDifferentialControl::mix(
-			_throttle_setpoint.throttle_body_x,
-			_steering_setpoint.normalized_steering_setpoint,
+			ground_input.throttle,
+			ground_input.steering,
 			_runtime_parameters.wheel_limit,
 			static_cast<uint8_t>(_param_fc_wheel_rev.get()));
 	}
@@ -172,7 +178,7 @@ void FlyingCar::publishActuators(const FlyingCarTransitionResult &transition, bo
 	output.timestamp = now_us;
 	output.timestamp_sample = FlyingCarRuntimeHelpers::outputSampleTimestamp(
 		output_mode, now_us, _actuator_motors.timestamp_sample,
-		_throttle_setpoint.timestamp, _steering_setpoint.timestamp);
+		ground_input.timestamp_sample, ground_input.timestamp_sample);
 	output.reversible_flags = gated.reversible_flags;
 
 	for (float &control : output.control) {
