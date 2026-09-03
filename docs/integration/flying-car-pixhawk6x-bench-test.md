@@ -118,13 +118,15 @@ ESC 动力保持断开，用示波器/逻辑分析仪在 AUX1..6 对地测量。
 
 #### C1. Ground 低能集成输出链
 
-只有 A、B 和 C 前述项目全部 PASS，且仍满足“无桨、双轮架空、`FC_WHEEL_THR_MAX=0.05`、限流动力、双人、物理急停就绪”，才允许执行本项。先进入稳定 Ground，使用 `listener flying_car_status` 确认 `mode=MODE_GROUND`、链路 ready 且无拒绝；启动 ULog 和示波器记录后，按正常 RC/车辆控制链短暂解锁。不得发布伪造 uORB 消息，不得使用手工 PWM/DShot 命令。
+只有 A、B 和 C 前述项目全部 PASS，且仍满足“无桨、双轮架空、`FC_WHEEL_THR_MAX=0.05`、限流动力、双人、物理急停就绪”，才允许执行本项。先进入稳定 Ground，使用 `listener flying_car_status` 确认 `mode=MODE_GROUND`、链路 ready 且无拒绝；再执行 `listener vehicle_control_mode`，确认本版本实际字段 `flag_control_climb_rate_enabled: true`。记录 QGC 飞行模式名称、完整 `vehicle_control_mode` 输出和采用的解锁方法。若该标志为 false 或话题/字段无法确认，本项立即记 FAIL，不得解锁。
 
-1. 油门和转向保持零，解锁不超过 3 s；预期 Motor1..4 始终不动、AUX5/6 保持约 1500 us。
+启动 ULog 和示波器记录后，把 throttle 保持在归一化中心 `0`，roll/steering 保持在中心 `0`。使用已经独立验证且未复用为模式选择的 Arm switch，或在 NSH 执行不带强制选项的 `commander arm`；严禁 `commander arm -f`。若中心零位不能正常通过预检并解锁，本项记 FAIL 并停止，不得把 throttle 拉到 `-1`/传统低位绕过。非 climb-rate 手动模式要求传统低油门解锁，该低位会成为反向轮指令，因此不允许用于本测试。不得发布伪造 uORB 消息，不得使用手工 PWM/DShot 命令。
+
+1. throttle、roll/steering 保持零，解锁不超过 3 s；解锁瞬间先确认 Motor1..4 始终不动、双轮无动作、AUX5/6 均为约 1500 us。任一项偏离立即执行 `commander disarm`，同时由安全员物理急停，记 FAIL，禁止继续阶跃。
 2. 给约 `+0.03` 归一化油门阶跃，持续不超过 1 s，然后回零至少 2 s；再给约 `-0.03`，同样不超过 1 s并回零。
 3. 油门为零时给约 `+0.02`、`-0.02` 转向阶跃，各不超过 1 s并在其间回零至少 2 s。总解锁时间不得超过 15 s。
 4. 当前 80003 不启动完整 Rover 链。用 `listener manual_control_setpoint` 确认 `valid=true`、`data_source=SOURCE_RC`、时间戳持续更新，前后杆只改变 `throttle`、左右杆只改变 `roll`；再对照 `flying_car_status`、`flying_car_actuator_motors`、最终可用的 `actuator_outputs` 与 AUX5/6 仪器波形，证明命令经过内部 Ground 输入选择与 `flying_car_actuator_motors → FunctionMotors → AUX5/6`。若现场另有明确发布的 Rover 两路设定值，必须确认两路同时新鲜且由同一控制源产生，它们会成对优先，禁止只注入一路。轮输出幅值不得超过 `0.05`，零值必须回到约 1500 us，旋翼必须始终无动作。
-5. 每组阶跃后立即 disarm，确认两轮回中和四旋翼停止，再断 ESC 动力。
+5. 每组阶跃后立即执行 `commander disarm`（或同一独立 Arm switch 切至 disarm），从 `vehicle_status` 确认已解除，再确认两轮回中和四旋翼停止，最后断 ESC 动力。
 
 任一旋翼动作、错误车轮动作、输出超过 `0.05`/PWM 范围、回零超过 200 ms、话题链或仪器证据中断、模式离开稳定 Ground、电流超过现场批准限值，安全员立即物理断电；记 FAIL，不得重复加大指令排查。
 

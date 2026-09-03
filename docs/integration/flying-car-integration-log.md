@@ -349,3 +349,9 @@
 - RC 失效、超时、未来时间戳或 NaN 会立即撤销 `ground_chain_ready`；运行时轮命令归零，Transition/Fault 的既有门控继续保证全部推进输出安全。
 - 此修复不启动 Rover 应用、不修改通用多旋翼或 Rover 控制器；原生 Linux PX4 编译仍待受支持环境验证。
 - 将 module stop/200 ms stale、status stale、Commander restart、RC loss、参数错误和两种模式重启拆为可执行步骤，逐项注明前置、注入、观察、预期、中止和恢复。独立 status stale 仅允许 SITL/开发插桩；实板不伪造 uORB，以 module stop 覆盖。
+
+### Task 10 第二轮复审修复：零位安全解锁
+
+- Ground 集成链执行前必须由 `listener vehicle_control_mode` 实测确认 `flag_control_climb_rate_enabled: true`，并记录飞行模式、完整控制标志和解锁方法。
+- throttle 与 roll/steering 均保持中心零位，只允许独立 Arm switch 或非强制 `commander arm`。中心零位解锁失败即终止；禁止以 `-1`/传统低油门或 `commander arm -f` 绕过，因为低位会成为反向轮命令。
+- 解锁瞬间先验证 AUX5/6 为 1500 us、双轮无动作、旋翼无动作，再允许极小阶跃；任何偏离立即 disarm 与物理急停。
