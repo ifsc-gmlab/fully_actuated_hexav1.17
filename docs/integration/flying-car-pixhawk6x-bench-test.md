@@ -123,7 +123,7 @@ ESC 动力保持断开，用示波器/逻辑分析仪在 AUX1..6 对地测量。
 1. 油门和转向保持零，解锁不超过 3 s；预期 Motor1..4 始终不动、AUX5/6 保持约 1500 us。
 2. 给约 `+0.03` 归一化油门阶跃，持续不超过 1 s，然后回零至少 2 s；再给约 `-0.03`，同样不超过 1 s并回零。
 3. 油门为零时给约 `+0.02`、`-0.02` 转向阶跃，各不超过 1 s并在其间回零至少 2 s。总解锁时间不得超过 15 s。
-4. 同时对照 `rover_throttle_setpoint`/`rover_steering_setpoint`、`flying_car_actuator_motors`、最终可用的 `actuator_outputs` 与 AUX5/6 仪器波形，证明命令经过 `flying_car_actuator_motors → FunctionMotors → AUX5/6`；轮输出幅值不得超过 `0.05`，零值必须回到约 1500 us，旋翼必须始终无动作。
+4. 当前 80003 不启动完整 Rover 链。用 `listener manual_control_setpoint` 确认 `valid=true`、`data_source=SOURCE_RC`、时间戳持续更新，前后杆只改变 `throttle`、左右杆只改变 `roll`；再对照 `flying_car_status`、`flying_car_actuator_motors`、最终可用的 `actuator_outputs` 与 AUX5/6 仪器波形，证明命令经过内部 Ground 输入选择与 `flying_car_actuator_motors → FunctionMotors → AUX5/6`。若现场另有明确发布的 Rover 两路设定值，必须确认两路同时新鲜且由同一控制源产生，它们会成对优先，禁止只注入一路。轮输出幅值不得超过 `0.05`，零值必须回到约 1500 us，旋翼必须始终无动作。
 5. 每组阶跃后立即 disarm，确认两轮回中和四旋翼停止，再断 ESC 动力。
 
 任一旋翼动作、错误车轮动作、输出超过 `0.05`/PWM 范围、回零超过 200 ms、话题链或仪器证据中断、模式离开稳定 Ground、电流超过现场批准限值，安全员立即物理断电；记 FAIL，不得重复加大指令排查。
@@ -151,6 +151,7 @@ ESC 动力保持断开，用示波器/逻辑分析仪在 AUX1..6 对地测量。
 - 前置：disarmed、稳定 Flight 或 Ground，输出已安全；优先断开 ESC 动力。记录 `input_rc`、`manual_control_setpoint`、`flying_car_status` 和 `vehicle_status`。
 - 注入：关闭发射机或使用接收机厂家规定的失联操作，禁止拔信号线。等待系统配置的 RC loss 检测时间。
 - 预期：RC/手动输入明确报告失联或无效；不发生未经授权的 Flight/Ground 请求，不能解锁，物理输出保持安全。
+- 若测试从稳定 Ground 开始，断开 RC 后 `ground_chain_ready` 必须在一次有效性更新或最迟 500 ms 新鲜度窗口内变为 false，AUX5/6 回到约 1500 us；不得由最后一次摇杆值继续驱动车轮。恢复 RC 后先保持轮输入为零并重新完成模式/解锁检查。
 - 中止：模式擅自切换、仍能解锁或任何推进输出。恢复时重新开启发射机，确认 RC valid、所选 AUX 的三段值和稳定状态恢复；保持 disarmed。
 
 #### D4. 参数错误与恢复

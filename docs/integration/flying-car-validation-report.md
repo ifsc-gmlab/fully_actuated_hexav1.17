@@ -114,6 +114,10 @@ make px4_fmu-v6x_default
 
 1. 在 Linux 上完成全部原生单测、SITL 和四个目标构建，并记录固件 SHA-256、大小及构建产物路径。
 2. 在 Gazebo SITL 中动态验证六路执行器、Flight/Ground 双向切换、超时、Fault、RC 丢失和 Commander 重启。
+
+### Ground 输入闭环补充验证
+
+最终复审后的 tracked validation 增加严格 C++ helper 测试，覆盖 80003 无 Rover publisher 的初始 not-ready、有效 RC 在 Ground 请求下的 `throttle`/`roll` 映射、Flight 请求隔离、RC loss、陈旧/未来时间戳、NaN、完整 Rover 对优先及禁止跨源拼接。该宿主测试验证纯选择契约，不等同于 native PX4 编译、SITL 或真机结果；后三项仍为 **NOT RUN**。
 3. 在 Pixhawk 6X 上无桨、车轮离地验证 AUX1–4 DShot600 与 AUX5–6 50 Hz PWM 的定时器组兼容性；确认同组通道不会被错误协议连带配置。
 4. 用示波器或协议分析仪确认 Motor1–4 只驱动旋翼、Motor5–6 只驱动车轮，轮电机中位严格为 1500 μs。
 5. 完成急停、断链、陈旧 uORB、模块停止、上电模式和解锁门测试，保存参数快照及 ULog。

@@ -637,3 +637,13 @@ No rotor motion in Ground, no wheel motion in Flight, no active output during tr
 git add docs/integration
 git commit -m "docs: add Pixhawk 6X flying car bench procedure"
 ```
+
+---
+
+### Final review remediation: Provide isolated 80003 Ground input
+
+- Add a pure, testable source selector: complete fresh Rover pair first; otherwise valid fresh RC manual input only while Ground is requested.
+- Map the documented PX4 manual fields `throttle` and `roll`, without starting the full Rover chain.
+- Feed readiness, wheel mixing and output sample time from the single selected source; never mix axes from different sources.
+- Validate absent publishers, source loss, stale/future/NaN data, precedence, Flight isolation and non-80003 bypass in the tracked suite.
+- Update the bench procedure to observe the actual selected input path and RC-loss neutralization.

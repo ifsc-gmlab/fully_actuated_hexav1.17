@@ -340,4 +340,12 @@
 
 - 补齐全部 `FC_*` 代码默认值和本次台架批准值；`FC_MODE_CH` 必须选择经现场监视确认的未占用 AUX，并验证 `<-0.5` Flight、`>0.5` Ground、中间保持。参数修改前保存快照，结束后恢复并重启复核。
 - 增加 Ground 低能集成链：仅在无桨、双轮架空、限流、双人和急停条件全部成立时，以 `FC_WHEEL_THR_MAX=0.05`、单次不超过 1 s 的极小阶跃短暂解锁，验证专用消息经 FunctionMotors 到 AUX5/6，旋翼全程不得动作。
+
+### 2026-09-02：最终复审 Ground 输入闭环修复
+
+- 发现 80003 只启动多旋翼应用与 `flying_car`，原运行时却只消费未启动发布者产生的 Rover 设定值，导致 Ground 永远 not-ready。
+- 核对 PX4 `DifferentialManualMode` 后，确认标准字段语义为 `manual_control_setpoint.throttle` 前向油门、`roll` 转向。
+- 增加单一来源选择：完整、新鲜、有限的 Rover 两轴优先；否则仅在 Ground 请求、有效 RC 来源以及发布/采样时间都新鲜时使用手动两轴。禁止跨源混合，普通构型和 Flight 请求不采用手动地面输入。
+- RC 失效、超时、未来时间戳或 NaN 会立即撤销 `ground_chain_ready`；运行时轮命令归零，Transition/Fault 的既有门控继续保证全部推进输出安全。
+- 此修复不启动 Rover 应用、不修改通用多旋翼或 Rover 控制器；原生 Linux PX4 编译仍待受支持环境验证。
 - 将 module stop/200 ms stale、status stale、Commander restart、RC loss、参数错误和两种模式重启拆为可执行步骤，逐项注明前置、注入、观察、预期、中止和恢复。独立 status stale 仅允许 SITL/开发插桩；实板不伪造 uORB，以 module stop 覆盖。

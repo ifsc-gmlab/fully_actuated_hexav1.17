@@ -154,6 +154,8 @@ enum class FlyingCarMode : uint8_t {
 
 新增 `FlyingCarStatus.msg`，至少发布当前状态、请求状态、切换许可、拒绝原因、飞行链健康状态和地面链健康状态。切换请求不能通过改写 `MAV_TYPE` 实现；RC 或 MAVLink 请求必须转换为明确的内部请求。
 
+80003 的首版地面输入由 `flying_car` 内部隔离选择，不启动会与多旋翼链冲突的完整 Rover 应用。PX4 标准手动语义为 `manual_control_setpoint.throttle` 对应车体前向油门、`roll` 对应左右转向。新鲜且有限的成对 `rover_throttle_setpoint`/`rover_steering_setpoint` 作为未来自主或外部控制源优先；否则，仅当形态开关已请求 Ground、消息有效且来源为 RC、发布与采样时间均新鲜时，才使用手动油门和转向。两轴必须来自同一来源，禁止跨源拼接。Flight 请求、RC 失效、陈旧/未来时间戳或非有限输入均使手动地面链立即 not-ready，车轮输出回中。
+
 ## 9. 启动和板级配置
 
 融合以下 `80003` 资源：
