@@ -59,7 +59,22 @@ PWM_AUX_DIS5=1500  PWM_AUX_MIN5=1100  PWM_AUX_MAX5=1900
 PWM_AUX_DIS6=1500  PWM_AUX_MIN6=1100  PWM_AUX_MAX6=1900
 ```
 
-还应记录 `FC_MODE_CH`、`FC_BOOT_MODE`、`FC_SW_VEL_MAX`、`FC_SW_DELAY`、`FC_WHEEL_TRACK`、`FC_WHEEL_SPD_MAX`、`FC_WHEEL_THR_MAX` 和 `FC_WHEEL_REV`。任何值不符时保持动力断开，恢复 80003 默认值、重启、重新导出并复核；禁止仅凭 QGC 页面缓存继续。
+飞行汽车参数必须按下表逐项记录。“代码默认值”来自 `src/modules/flying_car/module.yaml`；“本次批准值”是本文台架范围的判定基准，不等同于未来实车标定值。
+
+| 参数 | 代码默认值 | 本次批准试验值/判定基准 |
+|---|---:|---|
+| `FC_MODE_CH` | `0`（禁用 RC 切换） | 现场确认未被其他功能占用的 RC AUX 编号 `1..6`；例如确认 RC AUX1 空闲后设 `1`。不能确认映射则 FAIL |
+| `FC_BOOT_MODE` | `0` | `0`（Flight） |
+| `FC_SW_VEL_MAX` | `0.2 m/s` | `0.2 m/s` |
+| `FC_SW_DELAY` | `0.5 s` | `0.5 s` |
+| `FC_WHEEL_TRACK` | `0.5 m` | 实测轮距，记录到 `0.01 m`；只有实测为 `0.50 m` 时才沿用默认值，未测量则 FAIL |
+| `FC_WHEEL_SPD_MAX` | `2.0 m/s` | `0.2 m/s`，仅用于低能架空台架 |
+| `FC_WHEEL_THR_MAX` | `0.5` | `0.05`，仅用于低能架空台架 |
+| `FC_WHEEL_REV` | `0` | 根据架空方向检查选择 `0..3`，左右位定义必须与接线记录一致；未验证方向则 FAIL |
+
+修改前导出并保存原值。设置 `FC_MODE_CH` 后，在 QGC RC 校准/通道监视页确认所选物理开关只驱动对应 `manual_control_setpoint.auxN`：值 `< -0.5` 请求 Flight，值 `> 0.5` 请求 Ground，`[-0.5, 0.5]` 保持上一个请求。若通道串扰、端点达不到阈值、方向与标签不符或被飞行模式等功能复用，立即中止并重新选择未占用 AUX；禁止猜测通道编号。
+
+任何实际值不满足上表时保持动力断开，修正、重启、重新导出并复核。全部台架测试结束后恢复测试前参数快照、重启，再次导出并逐项确认恢复；禁止仅凭 QGC 页面缓存继续。
 
 `CA_R_REV=48` 表示 Motor5/6 可逆，不表示轮方向已经正确；方向用 `FC_WHEEL_REV` 和 ESC 接线在架空测试中确认。Motor5/6 的归一化零值物理上应为 1500 us 中位。Motor1..4 的 `NaN`/停止命令物理上应由 DShot 发送停止/禁用语义，不应被解释为最小持续转速；必须用仪器和无桨电机观察共同确认。
 
@@ -101,19 +116,52 @@ ESC 动力保持断开，用示波器/逻辑分析仪在 AUX1..6 对地测量。
 | 请求 Flight↔Ground 过渡 | 过渡期间旋翼停止、轮回中；稳定状态仅在延时和全部门满足后出现 | 过渡期间任何推进输出、超时未 Fault/拒绝 |
 | 已解锁时请求切换 | 切换被拒绝，当前稳定模式保持，记录拒绝原因 | 已解锁仍进入过渡或改变输出所有权 |
 
+#### C1. Ground 低能集成输出链
+
+只有 A、B 和 C 前述项目全部 PASS，且仍满足“无桨、双轮架空、`FC_WHEEL_THR_MAX=0.05`、限流动力、双人、物理急停就绪”，才允许执行本项。先进入稳定 Ground，使用 `listener flying_car_status` 确认 `mode=MODE_GROUND`、链路 ready 且无拒绝；启动 ULog 和示波器记录后，按正常 RC/车辆控制链短暂解锁。不得发布伪造 uORB 消息，不得使用手工 PWM/DShot 命令。
+
+1. 油门和转向保持零，解锁不超过 3 s；预期 Motor1..4 始终不动、AUX5/6 保持约 1500 us。
+2. 给约 `+0.03` 归一化油门阶跃，持续不超过 1 s，然后回零至少 2 s；再给约 `-0.03`，同样不超过 1 s并回零。
+3. 油门为零时给约 `+0.02`、`-0.02` 转向阶跃，各不超过 1 s并在其间回零至少 2 s。总解锁时间不得超过 15 s。
+4. 同时对照 `rover_throttle_setpoint`/`rover_steering_setpoint`、`flying_car_actuator_motors`、最终可用的 `actuator_outputs` 与 AUX5/6 仪器波形，证明命令经过 `flying_car_actuator_motors → FunctionMotors → AUX5/6`；轮输出幅值不得超过 `0.05`，零值必须回到约 1500 us，旋翼必须始终无动作。
+5. 每组阶跃后立即 disarm，确认两轮回中和四旋翼停止，再断 ESC 动力。
+
+任一旋翼动作、错误车轮动作、输出超过 `0.05`/PWM 范围、回零超过 200 ms、话题链或仪器证据中断、模式离开稳定 Ground、电流超过现场批准限值，安全员立即物理断电；记 FAIL，不得重复加大指令排查。
+
 ### D. 故障注入（仍须无桨且架空）
 
-| 注入 | 预期 | 立即中止条件 |
-|---|---|---|
-| RC loss/关闭发射机 | 不发生未经授权的模式切换；输出进入既定安全状态 | 任一推进输出持续或模式擅自切换 |
-| 正常执行 `flying_car stop` | 最终安全帧：Motor1..4 禁用/停止，Motor5/6 零值中位，标志 `48` | 输出锁存在先前推进值 |
-| 制造 `flying_car_status` 陈旧超过 1 s | Commander 拒绝解锁并保留上一个稳定车辆类型报告 | 仍能解锁 |
-| 制造专用电机源失联超过 200 ms | 不回退原生电机源；旋翼禁用、轮回中 | 回退导致推进，或轮非中位 |
-| 重启 Commander | 新鲜稳定状态到来前拒绝解锁；普通预检不可绕过该门 | RC 重解锁宽限或跳过预检能够绕过 |
-| 分别在 Flight、Ground 稳态重启整机 | 启动先安全；只在新鲜稳定状态后解除对应锁定；无瞬时误动作 | 上电脉冲、自走、陈旧状态被接受 |
-| 将关键参数改为错误值后重启 | 检查识别不一致并保持动力安全/禁止继续 | 系统带错误映射进入动力测试 |
+故障注入只允许用下列可恢复方法；不得带动力拔插信号线、短接接口、伪造实板 uORB 或发送手工 PWM。除 D1 中专门说明的低能输出观察外均保持 disarmed；Commander 重启和参数错误测试还必须断开 ESC 动力。
 
-故障注入只允许用可恢复、事先评审的方法；不得带动力拔插信号线或短接接口。
+#### D1. 模块停止、最终安全帧与 200 ms stale
+
+- 前置：完成 C1，稳定 Ground、轮已回零；若需看动力响应，保持架空、限流、`FC_WHEEL_THR_MAX=0.05`，只施加不超过 `0.03`、1 s 的轮命令后立即回零并 disarm。
+- 注入：在 NSH 执行 `flying_car stop`，不终止 mixer/output driver。
+- 观察：保存控制台；连续监听 `flying_car_actuator_motors`，同时看 `actuator_outputs`（若记录可用）和 AUX 波形。停止瞬间应收到最终安全帧：Motor1..4 为 `NaN`/禁用，Motor5/6 为零，`reversible_flags=48`；超过 200 ms 没有新专用帧后，FunctionMotors 仍必须保持同一物理安全输出且不得回退原生 `actuator_motors`。
+- 中止：任一旋翼动作、轮离开中位、旧推进值锁存或回退原生源，立即物理断电。
+- 恢复：保持 disarmed，执行 `flying_car start`；确认 `flying_car status` 为运行、新鲜 `flying_car_status` 和安全专用帧恢复，随后才可进入下一项。
+
+#### D2. status stale 与 Commander 重启
+
+- 独立制造“仅 `flying_car_status` 陈旧而执行器源仍新鲜”需要开发插桩，只允许在 SITL/开发构建中完成；实板禁止伪造或拦截 uORB。实板以 D1 的 module stop 同时覆盖状态陈旧，并在超过 1 s 后尝试正常 arm：Commander 必须拒绝，控制台/事件和 `vehicle_status` 应显示未解锁；车辆类型报告保持上一个新鲜稳定类型。
+- Commander 重启只在 disarmed 且 ESC 动力断开时执行：记录当前稳定模式，执行 `commander stop`，确认已停止，再执行 `commander start`。新鲜稳定 `flying_car_status` 到来前任何正常 arm 请求都必须被拒绝，RC 重解锁宽限和跳过可选预检也不得绕过。若命令不受该固件支持或 Commander 未能干净重启，立即执行整机 `reboot`，本项记 FAIL。
+- 恢复：确认 `commander status`、`flying_car status` 正常，`listener flying_car_status` 连续更新且处于稳定模式，再运行完整预检；仍保持 disarmed，之后才可重新连接 ESC 动力。
+
+#### D3. RC loss
+
+- 前置：disarmed、稳定 Flight 或 Ground，输出已安全；优先断开 ESC 动力。记录 `input_rc`、`manual_control_setpoint`、`flying_car_status` 和 `vehicle_status`。
+- 注入：关闭发射机或使用接收机厂家规定的失联操作，禁止拔信号线。等待系统配置的 RC loss 检测时间。
+- 预期：RC/手动输入明确报告失联或无效；不发生未经授权的 Flight/Ground 请求，不能解锁，物理输出保持安全。
+- 中止：模式擅自切换、仍能解锁或任何推进输出。恢复时重新开启发射机，确认 RC valid、所选 AUX 的三段值和稳定状态恢复；保持 disarmed。
+
+#### D4. 参数错误与恢复
+
+- 前置：disarmed、ESC 动力物理断开，保存完整参数快照。选择可安全恢复的构型身份错误：记录原 `SYS_FC_TYPE=1`，设置 `SYS_FC_TYPE=0` 并 `reboot`；不得故意写错误 AUX function、PWM 端点或定时器并连接动力。
+- 预期：`flying_car start` 拒绝以飞行汽车方式运行或系统保持非飞行汽车旁路；控制台与 `flying_car status` 提供可记录的失败/未运行证据。此状态绝不进入执行器测试。
+- 恢复：设置 `SYS_FC_TYPE=1`，重新选择/加载 `SYS_AUTOSTART=80003` 默认值，恢复本节开头保存的全部参数快照并 `reboot`。重新导出参数，逐项通过第 5 节，确认 `flying_car status`、新鲜稳定状态和全部输出安全后，本项才算恢复成功。
+
+#### D5. 两种稳定模式整机重启
+
+分别在 Flight、Ground 稳态执行，始终 disarmed、无桨、架空且限流。重启前轮回零；执行 `reboot` 后预期启动期间旋翼停止、轮回中，只有新鲜稳定状态到来后才解除相应解锁锁定。上电脉冲、自走或接受陈旧状态均立即物理断电并记 FAIL。每次重启后完成参数、状态和输出复核才进入下一种模式。
 
 ## 7. 记录与 ULog
 
