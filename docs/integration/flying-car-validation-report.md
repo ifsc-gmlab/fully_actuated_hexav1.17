@@ -25,6 +25,15 @@
 
 以下命令均在仓库根目录执行；除特别说明外，退出码均为 0。
 
+干净克隆中的统一入口为：
+
+```powershell
+$env:PATH = 'D:\Down\msys2\ucrt64\bin;D:\Down\msys2\usr\bin;' + $env:PATH
+& .\Tools\validation\run_flying_car_validation.ps1
+```
+
+第一行只是本次主机的工具发现设置；受跟踪脚本本身不包含本机绝对路径。脚本创建唯一的系统临时目录并保留元数据和测试可执行文件，不删除或覆盖不确定路径。
+
 | 范围 | 命令摘要 | 结果 |
 |---|---|---|
 | Task 2 消息/参数契约 | PowerShell 解析 `FlyingCarStatus.msg`、`msg/CMakeLists.txt`、`module.yaml` | PASS：12 个状态/拒绝常量、消息注册、9 个参数默认值 |
@@ -47,29 +56,26 @@
 
 Task 5 完整命令使用短路径工作树：`g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I<task-5-stubs> -I. ...`。所有桩验证只证明被测接口和独立逻辑在严格 C++17 编译下自洽，不等价于 PX4 生成头、链接和调度环境中的原生构建。
 
-### 可复现命令
+### 会话级 standalone harness 证据
 
-其中 `$D=.superpowers/sdd/2026-09-01-flying-car-isolated-integration`，`$S=$D/task-5-stubs`；Windows 长路径主机可先把仓库根映射为短盘符。
+Task 3/4/5 的 harness 源和桩位于被 `.superpowers/sdd/.gitignore` 排除的会话目录，不能承诺在干净克隆中存在。以下是本次会话实际使用的完整 PowerShell 命令；它们补充而不替代上述受跟踪验证套件。
 
 ```text
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. $D/task-3-harness.cpp src/modules/flying_car/FlyingCarModeManager.cpp -o $D/task-3-harness.exe
-$D/task-3-harness.exe
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I$D/stubs -I. -Isrc/lib $D/task-4-harness.cpp src/modules/flying_car/FlyingCarDifferentialControl.cpp src/modules/flying_car/FlyingCarActuatorGate.cpp -o $D/task-4-harness.exe
-$D/task-4-harness.exe
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. $D/task-5-harness.cpp -o $D/task-5-harness.exe
-$D/task-5-harness.exe
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I$S -I. -include $S/task5_common.hpp $D/task-5-function-motors-syntax.cpp -o $D/task-5-function-motors.exe
-$D/task-5-function-motors.exe
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I$S -I. -Isrc/lib $D/task-5-runtime-stop.cpp src/modules/flying_car/FlyingCarModeManager.cpp src/modules/flying_car/FlyingCarDifferentialControl.cpp src/modules/flying_car/FlyingCarActuatorGate.cpp -o $D/task-5-runtime-stop.exe
-$D/task-5-runtime-stop.exe
-python -m unittest discover -s test/romfs -p 'test_flying_car_airframe.py' -v
-python -m unittest discover -s test -p 'test_flying_car_commander_arm_gate.py' -v
-D:/Down/msys2/ucrt64/bin/g++.exe -std=c++17 -Wall -Wextra -Werror -pedantic -I. test/flying_car_commander_safety_test.cpp -o $D/flying-car-commander-safety-test.exe
-$D/flying-car-commander-safety-test.exe
-python Tools/simulation/gz_custom_models/flying_car/model_test.py
-python Tools/px_process_airframes.py -a ROMFS/px4fmu_common/init.d/airframes -x <temporary-airframes.xml>
-git diff --name-only 1810a55..HEAD -- src/modules/mc_pos_control src/modules/mc_att_control src/modules/mc_rate_control src/modules/rover_differential src/modules/control_allocator
-git diff --check
+$d = '.superpowers/sdd/2026-09-01-flying-car-isolated-integration'
+$s = "$d/task-5-stubs"
+$gpp = 'D:/Down/msys2/ucrt64/bin/g++.exe'
+& $gpp -std=c++17 -Wall -Wextra -Werror -pedantic -I. "$d/task-3-harness.cpp" src/modules/flying_car/FlyingCarModeManager.cpp -o "$d/task-3-harness.exe"
+& "$d/task-3-harness.exe"
+& $gpp -std=c++17 -Wall -Wextra -Werror -pedantic "-I$d/stubs" -I. -Isrc/lib "$d/task-4-harness.cpp" src/modules/flying_car/FlyingCarDifferentialControl.cpp src/modules/flying_car/FlyingCarActuatorGate.cpp -o "$d/task-4-harness.exe"
+& "$d/task-4-harness.exe"
+& $gpp -std=c++17 -Wall -Wextra -Werror -pedantic -I. "$d/task-5-harness.cpp" -o "$d/task-5-harness.exe"
+& "$d/task-5-harness.exe"
+cmd.exe /c subst X: "$PWD"
+Set-Location X:\
+& $gpp -std=c++17 -Wall -Wextra -Werror -pedantic "-I$s" -I. -include "$s/task5_common.hpp" "$d/task-5-function-motors-syntax.cpp" -o "$d/task-5-function-motors.exe"
+& "$d/task-5-function-motors.exe"
+& $gpp -std=c++17 -Wall -Wextra -Werror -pedantic "-I$s" -I. -Isrc/lib "$d/task-5-runtime-stop.cpp" src/modules/flying_car/FlyingCarModeManager.cpp src/modules/flying_car/FlyingCarDifferentialControl.cpp src/modules/flying_car/FlyingCarActuatorGate.cpp -o "$d/task-5-runtime-stop.exe"
+& "$d/task-5-runtime-stop.exe"
 ```
 
 ## 四类配置隔离对照

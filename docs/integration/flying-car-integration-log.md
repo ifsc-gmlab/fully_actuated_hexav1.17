@@ -321,3 +321,9 @@
 - `1810a55..HEAD` 对通用多旋翼位置/姿态/速率控制器、通用差速车和 control allocator 的差异为空；6003/6004 机架差异为空；禁止由 flying-car 代码启停既有控制模块的扫描为空。
 - 本机缺少 `make`、CMake、Ninja、ARM GCC、Gazebo，并且 WSL 没有 Linux 发行版。因此原生 GoogleTest、完整 SITL、FMUv6C 和 FMUv6X 构建均记录为 NOT RUN；没有固件产物或哈希，不声称真实 Pixhawk 6X 或实车/实机支持已经验证。
 - 后续必须完成 Linux 原生构建、SITL 六路动态验证、Pixhawk 6X AUX1–4 DShot/AUX5–6 PWM 混合协议无桨台架，以及带参数快照和 ULog 的真机分阶段测试。
+
+### Task 9 复审修复：受跟踪验证入口
+
+- 新增 `Tools/validation/run_flying_car_validation.ps1`，在仓库根目录统一复现 Task 2、6、7、8 的受跟踪测试、shell/XML/metadata 检查以及 generic、6003/6004、禁止模块控制和补丁格式隔离门。
+- 脚本不依赖本机绝对路径，不读取 ignored SDD 资产；临时产物写入唯一系统临时目录并保留，不执行不确定路径删除。
+- 验证报告把 Task 3/4/5 ignored harness 明确标为本次会话 standalone 证据，并给出 PowerShell 可直接执行、使用 `&` 调用的完整命令，不再暗示其可由干净克隆重放。
