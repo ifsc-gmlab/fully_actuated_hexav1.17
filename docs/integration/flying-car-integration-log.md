@@ -327,3 +327,11 @@
 - 新增 `Tools/validation/run_flying_car_validation.ps1`，在仓库根目录统一复现 Task 2、6、7、8 的受跟踪测试、shell/XML/metadata 检查以及 generic、6003/6004、禁止模块控制和补丁格式隔离门。
 - 脚本不依赖本机绝对路径，不读取 ignored SDD 资产；临时产物写入唯一系统临时目录并保留，不执行不确定路径删除。
 - 验证报告把 Task 3/4/5 ignored harness 明确标为本次会话 standalone 证据，并给出 PowerShell 可直接执行、使用 `&` 调用的完整命令，不再暗示其可由干净克隆重放。
+
+## 2026-09-02：Task 10 Pixhawk 6X 台架准入程序
+
+- 新增 `docs/integration/flying-car-pixhawk6x-bench-test.md`，仅适用于 80003 与 Pixhawk 6X/FMUv6X；明确当前固件构建、实板定时器分组、动力台架、实车和实飞均为 NOT RUN。
+- 把 Linux `px4_fmu-v6x_default` 构建和固件 SHA-256 设为刷写前置门，并要求保存提交哈希、参数快照、接线照片、仪器截图、ULog 与双人签字。
+- 分阶段规定静态电气、无动力信号、动力无桨/车辆架空和故障注入；每项都有预期与立即中止条件。本文最高只批准到无桨架空台架，低能地面和系留飞行仍需独立评审，非系留/载人测试不在范围内。
+- 明确 AUX1–4 DShot600、AUX5–6 50 Hz reversible PWM 的接线、供电、公共信号地、实板定时器组检查、DShot 停止/NaN 与 PWM 零值/1500 us 的物理验收要求，并禁止从飞控为动力负载供电。
+- 故障矩阵覆盖已解锁切换拒绝、RC loss、模块停止、专用源和状态陈旧、Commander/整机重启以及参数错误；任何输出锁存、错误回退或上电误动作均要求立即物理断电。
