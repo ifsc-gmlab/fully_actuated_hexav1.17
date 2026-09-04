@@ -95,7 +95,7 @@ class FlyingCarModelTest(unittest.TestCase):
     def test_custom_resource_root_does_not_occupy_gz_submodule_path(self):
         gitmodules = (REPO_ROOT / ".gitmodules").read_text(encoding="utf-8")
         self.assertIn("path = Tools/simulation/gz", gitmodules)
-        self.assertFalse((REPO_ROOT / "Tools/simulation/gz").exists())
+        self.assertFalse((REPO_ROOT / "Tools/simulation/gz/models/flying_car").exists())
         self.assertEqual(REPO_ROOT / "Tools/simulation/gz_custom_models/flying_car/model.sdf",
                          MODEL_PATH)
 
@@ -106,7 +106,12 @@ class FlyingCarModelTest(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout.strip()
-        self.assertEqual("", tracked_submodule_path)
+        gitlink_fields = tracked_submodule_path.split()
+        self.assertEqual(4, len(gitlink_fields))
+        self.assertEqual("160000", gitlink_fields[0])
+        self.assertRegex(gitlink_fields[1], r"^[0-9a-f]{40}$")
+        self.assertEqual("0", gitlink_fields[2])
+        self.assertEqual("Tools/simulation/gz", gitlink_fields[3])
 
     def test_environment_and_startup_resolve_the_custom_model_root(self):
         environment = GZ_ENV_PATH.read_text(encoding="utf-8")
